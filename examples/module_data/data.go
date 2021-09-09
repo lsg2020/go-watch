@@ -6,6 +6,10 @@ type RoleInfo struct {
 	id    int32
 }
 
+func (r *RoleInfo) Add(a int, b int) (int, int, int) {
+	return a, b, a + b
+}
+
 type TestData struct {
 	name   string
 	map1   map[int32]*RoleInfo

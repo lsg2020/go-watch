@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	lua "github.com/yuin/gopher-lua"
+	"github.com/spance/go-callprivate/private"
 )
 
 const ModuleName = "go_watch"
@@ -22,9 +23,11 @@ var exports = map[string]lua.LGFunction{
 
 	"clone":       clone,
 	"reflect2obj": reflect2obj,
+	"call":        call,
 
-	"field_get_by_name": field_get_by_name,
-	"field_set_by_name": field_set_by_name,
+	"field_get_by_name":  field_get_by_name,
+	"field_set_by_name":  field_set_by_name,
+	"method_get_by_name": method_get_by_name,
 
 	"map_get":     map_get,
 	"map_set":     map_set,
@@ -49,6 +52,7 @@ var exports = map[string]lua.LGFunction{
 	"set_any":     set_any,
 
 	"new_boolean": new_boolean,
+	"new_int":     new_int,
 	"new_int8":    new_int8,
 	"new_int16":   new_int16,
 	"new_int32":   new_int32,
@@ -156,6 +160,70 @@ func print(state *lua.LState) int {
 
 	root.Print(int(session), str)
 	return 0
+}
+
+func call(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	paramList := make([]reflect.Value, 0, state.GetTop()-1)
+	for i := 1; i < state.GetTop(); i++ {
+		p := state.CheckUserData(i + 1)
+		if r, ok := p.Value.(reflect.Value); ok {
+			paramList = append(paramList, r)
+		} else {
+			paramList = append(paramList, reflect.ValueOf(p.Value))
+		}
+	}
+
+	var rfn reflect.Value
+	if r, ok := ud.Value.(reflect.Value); ok {
+		rfn = r
+	} else {
+		rfn = reflect.ValueOf(ud.Value)
+	}
+
+	var ret []reflect.Value
+	if rfn.Kind() == reflect.Ptr && rfn.Elem().Kind() == reflect.Func {
+		ret = rfn.Elem().Call(paramList)
+	} else if rfn.Kind() == reflect.Func {
+		ret = rfn.Call(paramList)
+	} else {
+		state.RaiseError("param1 need function")
+	}
+
+	for _, r := range ret {
+		ud := new_userdata(state, r)
+		state.Push(ud)
+	}
+
+	return len(ret)
+}
+
+func method_get_by_name(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	name := state.CheckString(2)
+
+	var rf reflect.Value
+	var rud reflect.Value
+	if r, ok := ud.Value.(reflect.Value); ok {
+		rud = r
+	} else {
+		rud = reflect.ValueOf(ud.Value)
+	}
+	if rud.Kind() == reflect.Ptr && rud.Elem().Kind() == reflect.Struct {
+		//rf = rud.MethodByName(name)
+		rf = rud.MethodByName(name)
+		//private.SetAccessible(rf)
+	} else if rud.Kind() == reflect.Struct {
+		rf = rud.MethodByName(name)
+		//private.SetAccessible(rf)
+	} else {
+		private.SetAccessible(reflect.ValueOf(1))
+		state.RaiseError("param1 need struct")
+	}
+
+	ret := new_userdata(state, rf)
+	state.Push(ret)
+	return 1
 }
 
 func field_get_by_name(state *lua.LState) int {
@@ -567,6 +635,11 @@ func slice_append(state *lua.LState) int {
 func new_boolean(state *lua.LState) int {
 	val := state.CheckBool(1)
 	state.Push(new_userdata(state, bool(val)))
+	return 1
+}
+func new_int(state *lua.LState) int {
+	val := state.CheckNumber(1)
+	state.Push(new_userdata(state, int(val)))
 	return 1
 }
 func new_int8(state *lua.LState) int {

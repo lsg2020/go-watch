@@ -62,6 +62,10 @@ func main() {
 	go_watch.field_set_by_name(root, "slice1", go_watch.slice_append(slice1, role100))
 
 	print("\n\n")
+	
+	local add1 = go_watch.method_get_by_name(role1, "Add")
+	local r1, r2, r3 = go_watch.call(add1, go_watch.new_int(100), go_watch.new_int(200))
+	print(go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
 
 	`, 1); err != nil {
 		fmt.Println("go watch error:", err)
