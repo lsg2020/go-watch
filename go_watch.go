@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	lua "github.com/yuin/gopher-lua"
 	"github.com/spance/go-callprivate/private"
+	lua "github.com/yuin/gopher-lua"
 )
 
 const ModuleName = "go_watch"
@@ -21,9 +21,10 @@ var exports = map[string]lua.LGFunction{
 	"root_get": root_get,
 	"print":    print,
 
-	"clone":       clone,
-	"reflect2obj": reflect2obj,
-	"call":        call,
+	"clone":          clone,
+	"reflect2obj":    reflect2obj,
+	"call":           call,
+	"call_with_name": call_with_name,
 
 	"field_get_by_name":  field_get_by_name,
 	"field_set_by_name":  field_set_by_name,
@@ -195,6 +196,60 @@ func call(state *lua.LState) int {
 		state.Push(ud)
 	}
 
+	return len(ret)
+}
+
+func call_with_name(state *lua.LState) int {
+	name := state.CheckString(1)
+	in := state.CheckTable(2)
+	out := state.CheckTable(3)
+
+	ptr, err := FindFuncWithName(name)
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("func:%s not found", name))
+	}
+
+	in_types := make([]reflect.Type, in.Len())
+	in_values := make([]reflect.Value, in.Len())
+	for i := 1; i <= in.Len(); i++ {
+		v := in.RawGetInt(i)
+		if ud, ok := v.(*lua.LUserData); ok {
+			if r, ok := ud.Value.(reflect.Value); ok {
+				in_types[i-1] = reflect.TypeOf(r.Interface())
+				in_values[i-1] = r
+			} else {
+				in_types[i-1] = reflect.TypeOf(ud.Value)
+				in_values[i-1] = reflect.ValueOf(ud.Value)
+			}
+		} else {
+			state.RaiseError(fmt.Sprintf("in params:%d not user data", i))
+		}
+	}
+
+	out_types := make([]reflect.Type, out.Len())
+	for i := 1; i <= out.Len(); i++ {
+		v := out.RawGetInt(i)
+		if ud, ok := v.(*lua.LUserData); ok {
+			if r, ok := ud.Value.(reflect.Value); ok {
+				out_types[i-1] = reflect.TypeOf(r.Interface())
+			} else {
+				out_types[i-1] = reflect.TypeOf(ud.Value)
+			}
+		} else {
+			state.RaiseError(fmt.Sprintf("out params:%d not user data", i))
+		}
+	}
+
+	new_func := reflect.MakeFunc(reflect.FuncOf(in_types, out_types, false), nil)
+	func_ptr_val := reflect.ValueOf(new_func).FieldByName("ptr").Pointer()
+	func_ptr := (*Func)(unsafe.Pointer(func_ptr_val))
+	func_ptr.codePtr = ptr
+
+	ret := new_func.Call(in_values)
+	for _, r := range ret {
+		ud := new_userdata(state, r)
+		state.Push(ud)
+	}
 	return len(ret)
 }
 

@@ -1,5 +1,7 @@
 package module_data
 
+import "fmt"
+
 type RoleInfo struct {
 	name  string
 	level int32
@@ -7,7 +9,12 @@ type RoleInfo struct {
 }
 
 func (r *RoleInfo) Add(a int, b int) (int, int, int) {
-	return a, b, a + b
+	return testAdd(a, b)
+}
+
+func (r *RoleInfo) add(a int, b int) (int, int, int) {
+	fmt.Println("RoleInfo.add", r)
+	return testAdd(a, b)
 }
 
 type TestData struct {
@@ -29,11 +36,14 @@ func (p *TestData) AddSliceRole(r *RoleInfo) {
 }
 
 func NewRole(id int32, name string, level int32) *RoleInfo {
-	return &RoleInfo{
+	r := &RoleInfo{
 		id:    id,
 		name:  name,
 		level: level,
 	}
+	r.add(1, 2)
+
+	return r
 }
 
 func NewData(name string) *TestData {
@@ -42,4 +52,10 @@ func NewData(name string) *TestData {
 		map1: make(map[int32]*RoleInfo),
 	}
 	return v
+}
+
+func testAdd(a, b int) (int, int, int) {
+	fmt.Println("testAdd", a, b)
+
+	return a, b, a + b
 }
