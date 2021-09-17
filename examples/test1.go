@@ -73,6 +73,20 @@ func main() {
 	r1, r2, r3 = go_watch.call_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).add", {role1, go_watch.new_int(102), go_watch.new_int(202)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
 	print("call_with_name:", go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
 
+	print("\n\n=============================\n")
+
+	go_watch.hotfix_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", [[
+		local go_watch = require('go_watch') 
+		local a, b = ...
+		print("hotfix replace testAdd ---------------", go_watch.get_number(a), go_watch.get_number(b))
+		return a, b, go_watch.new_int(go_watch.get_number(a) + go_watch.get_number(b))
+	]], {go_watch.new_int(0), go_watch.new_int(0)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
+
+	print("\n\n=============================\n")
+
+	r1, r2, r3 = go_watch.call_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", {go_watch.new_int(101), go_watch.new_int(201)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
+	print("call_with_name:", go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
+
 	`, 1); err != nil {
 		fmt.Println("go watch error:", err)
 		return

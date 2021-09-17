@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"unsafe"
 
+	"bou.ke/monkey"
 	"github.com/spance/go-callprivate/private"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -21,10 +22,11 @@ var exports = map[string]lua.LGFunction{
 	"root_get": root_get,
 	"print":    print,
 
-	"clone":          clone,
-	"reflect2obj":    reflect2obj,
-	"call":           call,
-	"call_with_name": call_with_name,
+	"clone":            clone,
+	"reflect2obj":      reflect2obj,
+	"call":             call,
+	"call_with_name":   call_with_name,
+	"hotfix_with_name": hotfix_with_name,
 
 	"field_get_by_name":  field_get_by_name,
 	"field_set_by_name":  field_set_by_name,
@@ -251,6 +253,111 @@ func call_with_name(state *lua.LState) int {
 		state.Push(ud)
 	}
 	return len(ret)
+}
+
+//go:linkname MonkeyPathValue bou.ke/monkey.patchValue
+func MonkeyPathValue(target, replacement reflect.Value)
+
+type HotfixContext struct {
+	state *lua.LState
+	fn    *lua.LFunction
+	in    []reflect.Type
+	out   []reflect.Type
+}
+
+func (ctx *HotfixContext) Do(params []reflect.Value) []reflect.Value {
+	var err error
+	ret := make([]reflect.Value, len(ctx.out))
+	if len(params) != len(ctx.in) {
+		goto err_ret
+	}
+
+	ctx.state.Push(ctx.fn)
+	for _, param := range params {
+		ctx.state.Push(new_userdata(ctx.state, param))
+	}
+
+	err = ctx.state.PCall(len(params), len(ctx.out), nil)
+	if err != nil {
+		fmt.Println("hotfix function error", err)
+		goto err_ret
+	}
+
+	for i := 1; i <= len(ctx.out); i++ {
+		ud := ctx.state.CheckUserData(-1)
+		ctx.state.Pop(1)
+
+		if r, ok := ud.Value.(reflect.Value); ok {
+			ret[len(ctx.out)-i] = r
+		} else {
+			ret[len(ctx.out)-i] = reflect.ValueOf(ud.Value)
+		}
+	}
+	return ret
+
+	//code := state.CheckString(-1)
+	//state.Pop(1)
+err_ret:
+
+	for i, o := range ctx.out {
+		ret[i] = reflect.New(o).Elem()
+	}
+	return ret
+}
+
+func hotfix_with_name(state *lua.LState) int {
+	name := state.CheckString(1)
+	script := state.CheckString(2)
+	in := state.CheckTable(3)
+	out := state.CheckTable(4)
+
+	ptr, err := FindFuncWithName(name)
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("func:%s not found", name))
+	}
+
+	fn, err := state.LoadString(script)
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("script error:%v", err))
+	}
+
+	in_types := make([]reflect.Type, in.Len())
+	for i := 1; i <= in.Len(); i++ {
+		v := in.RawGetInt(i)
+		if ud, ok := v.(*lua.LUserData); ok {
+			if r, ok := ud.Value.(reflect.Value); ok {
+				in_types[i-1] = reflect.TypeOf(r.Interface())
+			} else {
+				in_types[i-1] = reflect.TypeOf(ud.Value)
+			}
+		} else {
+			state.RaiseError(fmt.Sprintf("in params:%d not user data", i))
+		}
+	}
+
+	out_types := make([]reflect.Type, out.Len())
+	for i := 1; i <= out.Len(); i++ {
+		v := out.RawGetInt(i)
+		if ud, ok := v.(*lua.LUserData); ok {
+			if r, ok := ud.Value.(reflect.Value); ok {
+				out_types[i-1] = reflect.TypeOf(r.Interface())
+			} else {
+				out_types[i-1] = reflect.TypeOf(ud.Value)
+			}
+		} else {
+			state.RaiseError(fmt.Sprintf("out params:%d not user data", i))
+		}
+	}
+
+	old_func := reflect.MakeFunc(reflect.FuncOf(in_types, out_types, false), nil)
+	func_ptr_val := reflect.ValueOf(old_func).FieldByName("ptr").Pointer()
+	func_ptr := (*Func)(unsafe.Pointer(func_ptr_val))
+	func_ptr.codePtr = ptr
+
+	hotfix := &HotfixContext{state: state, fn: fn, in: in_types, out: out_types}
+	new_func := reflect.MakeFunc(reflect.FuncOf(in_types, out_types, false), hotfix.Do)
+	monkey.Patch(old_func.Interface(), new_func.Interface())
+	return 0
 }
 
 func method_get_by_name(state *lua.LState) int {
