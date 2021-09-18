@@ -6,12 +6,17 @@ import (
 	"unsafe"
 
 	"bou.ke/monkey"
+	"github.com/AlaxLee/go-forceexport"
 	"github.com/spance/go-callprivate/private"
 	lua "github.com/yuin/gopher-lua"
 )
 
 const ModuleName = "go_watch"
 const debug_ctx = "go_watch_debug_ctx"
+
+type Func struct {
+	codePtr uintptr
+}
 
 type Root interface {
 	Get(name string) interface{}
@@ -206,7 +211,7 @@ func call_with_name(state *lua.LState) int {
 	in := state.CheckTable(2)
 	out := state.CheckTable(3)
 
-	ptr, err := FindFuncWithName(name)
+	ptr, err := forceexport.FindFuncWithName(name)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("func:%s not found", name))
 	}
@@ -311,7 +316,7 @@ func hotfix_with_name(state *lua.LState) int {
 	in := state.CheckTable(3)
 	out := state.CheckTable(4)
 
-	ptr, err := FindFuncWithName(name)
+	ptr, err := forceexport.FindFuncWithName(name)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("func:%s not found", name))
 	}
