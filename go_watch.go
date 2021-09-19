@@ -3,6 +3,8 @@ package go_watch
 import (
 	"fmt"
 	"reflect"
+	"strings"
+	"sync"
 	"unsafe"
 
 	"bou.ke/monkey"
@@ -13,15 +15,6 @@ import (
 
 const ModuleName = "go_watch"
 const debug_ctx = "go_watch_debug_ctx"
-
-type Func struct {
-	codePtr uintptr
-}
-
-type Root interface {
-	Get(name string) interface{}
-	Print(session int, str string)
-}
 
 var exports = map[string]lua.LGFunction{
 	"root_get": root_get,
@@ -59,22 +52,37 @@ var exports = map[string]lua.LGFunction{
 	"set_boolean": set_boolean,
 	"set_any":     set_any,
 
-	"new_boolean": new_boolean,
-	"new_int":     new_int,
-	"new_int8":    new_int8,
-	"new_int16":   new_int16,
-	"new_int32":   new_int32,
-	"new_int64":   new_int64,
-	"new_uint8":   new_uint8,
-	"new_uint16":  new_uint16,
-	"new_uint32":  new_uint32,
-	"new_uint64":  new_uint64,
-	"new_string":  new_string,
+	"new_boolean":   new_boolean,
+	"new_int":       new_int,
+	"new_int8":      new_int8,
+	"new_int16":     new_int16,
+	"new_int32":     new_int32,
+	"new_int64":     new_int64,
+	"new_uint8":     new_uint8,
+	"new_uint16":    new_uint16,
+	"new_uint32":    new_uint32,
+	"new_uint64":    new_uint64,
+	"new_string":    new_string,
+	"new_with_name": new_with_name,
+
+	"get_type_name": get_type_name,
+	"get_func_name": get_func_name,
 }
 
-func NewLuaState(root Root) *lua.LState {
+type Func struct {
+	codePtr uintptr
+}
+
+type RootFunc func(name string) interface{}
+type PrintFunc func(session int, str string)
+type Context struct {
+	root  RootFunc
+	print PrintFunc
+}
+
+func NewLuaState(root RootFunc, print PrintFunc) *lua.LState {
 	state := lua.NewState()
-	ud := new_userdata(state, root)
+	ud := new_userdata(state, &Context{root: root, print: print})
 	state.SetGlobal(debug_ctx, ud)
 
 	state.PreloadModule(ModuleName, func(state *lua.LState) int {
@@ -138,13 +146,13 @@ func new_userdata(state *lua.LState, data interface{}) *lua.LUserData {
 	return ud
 }
 
-func get_context(state *lua.LState) (root Root) {
+func get_context(state *lua.LState) (ctx *Context) {
 	ud, ok := state.GetGlobal(debug_ctx).(*lua.LUserData)
 	if !ok {
 		state.RaiseError("debug_ctx error")
 	}
 
-	root, ok = ud.Value.(Root)
+	ctx, ok = ud.Value.(*Context)
 	if !ok {
 		state.RaiseError("debug_ctx error.")
 	}
@@ -152,21 +160,21 @@ func get_context(state *lua.LState) (root Root) {
 }
 
 func root_get(state *lua.LState) int {
-	root := get_context(state)
+	ctx := get_context(state)
 	name := state.CheckString(1)
 
-	ud := new_userdata(state, root.Get(name))
+	ud := new_userdata(state, ctx.root(name))
 	state.Push(ud)
 	return 1
 }
 
 func print(state *lua.LState) int {
-	root := get_context(state)
+	ctx := get_context(state)
 
 	session := state.CheckNumber(1)
 	str := state.CheckString(2)
 
-	root.Print(int(session), str)
+	ctx.print(int(session), str)
 	return 0
 }
 
@@ -260,9 +268,6 @@ func call_with_name(state *lua.LState) int {
 	return len(ret)
 }
 
-//go:linkname MonkeyPathValue bou.ke/monkey.patchValue
-func MonkeyPathValue(target, replacement reflect.Value)
-
 type HotfixContext struct {
 	state *lua.LState
 	fn    *lua.LFunction
@@ -300,14 +305,42 @@ func (ctx *HotfixContext) Do(params []reflect.Value) []reflect.Value {
 	}
 	return ret
 
-	//code := state.CheckString(-1)
-	//state.Pop(1)
 err_ret:
 
 	for i, o := range ctx.out {
 		ret[i] = reflect.New(o).Elem()
 	}
 	return ret
+}
+
+var all_func_name []string
+var func_name_mutex sync.Mutex
+
+func load_func_name() {
+	func_name_mutex.Lock()
+	defer func_name_mutex.Unlock()
+
+	if all_func_name != nil {
+		return
+	}
+
+	all_func_name = forceexport.GetAllFuncName()
+}
+
+func get_func_name(state *lua.LState) int {
+	load_func_name()
+
+	include := state.CheckString(1)
+
+	ret := &lua.LTable{}
+	for _, name := range all_func_name {
+		if include == "" || strings.Index(name, include) >= 0 {
+			ret.Append(lua.LString(name))
+		}
+	}
+
+	state.Push(ret)
+	return 1
 }
 
 func hotfix_with_name(state *lua.LState) int {
@@ -852,6 +885,78 @@ func new_uint64(state *lua.LState) int {
 func new_string(state *lua.LState) int {
 	val := state.CheckString(1)
 	state.Push(new_userdata(state, val))
+	return 1
+}
+
+//go:linkname typelinks reflect.typelinks
+func typelinks() (sections []unsafe.Pointer, offset [][]int32)
+
+//go:linkname resolveTypeOff reflect.resolveTypeOff
+func resolveTypeOff(rtype unsafe.Pointer, off int32) unsafe.Pointer
+
+type emptyInterface struct {
+	typ  unsafe.Pointer
+	word unsafe.Pointer
+}
+
+var types map[string]reflect.Type
+var types_mutex sync.Mutex
+
+func load_types() {
+	types_mutex.Lock()
+	defer types_mutex.Unlock()
+
+	if types != nil {
+		return
+	}
+
+	types = make(map[string]reflect.Type, 256)
+	var obj interface{} = reflect.TypeOf(0)
+	sections, offset := typelinks()
+	for i, offs := range offset {
+		rodata := sections[i]
+		for _, off := range offs {
+			(*emptyInterface)(unsafe.Pointer(&obj)).word = resolveTypeOff(unsafe.Pointer(rodata), off)
+			typ := obj.(reflect.Type)
+			if typ.Kind() == reflect.Ptr && typ.Elem().Kind() == reflect.Struct {
+				types[typ.Elem().String()] = typ.Elem()
+			}
+		}
+	}
+}
+
+func new_with_name(state *lua.LState) int {
+	load_types()
+
+	type_name := state.CheckString(1)
+	use_ptr := state.CheckBool(2)
+	t, ok := types[type_name]
+	if !ok {
+		state.RaiseError(fmt.Sprintf("type:%s not found", type_name))
+	}
+
+	v := reflect.New(t)
+	if !use_ptr {
+		v = v.Elem()
+	}
+
+	state.Push(new_userdata(state, v))
+	return 1
+}
+
+func get_type_name(state *lua.LState) int {
+	load_types()
+
+	include := state.CheckString(1)
+
+	ret := &lua.LTable{}
+	for name := range types {
+		if include == "" || strings.Index(name, include) >= 0 {
+			ret.Append(lua.LString(name))
+		}
+	}
+
+	state.Push(ret)
 	return 1
 }
 
