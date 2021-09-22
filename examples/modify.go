@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	go_watch "github.com/lsg2020/go-watch"
+	"github.com/lsg2020/go-watch"
 	"github.com/lsg2020/go-watch/examples/module_data"
 )
 

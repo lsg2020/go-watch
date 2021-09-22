@@ -9,7 +9,6 @@ import (
 
 	"bou.ke/monkey"
 	"github.com/AlaxLee/go-forceexport"
-	"github.com/spance/go-callprivate/private"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -410,14 +409,10 @@ func method_get_by_name(state *lua.LState) int {
 		rud = reflect.ValueOf(ud.Value)
 	}
 	if rud.Kind() == reflect.Ptr && rud.Elem().Kind() == reflect.Struct {
-		//rf = rud.MethodByName(name)
 		rf = rud.MethodByName(name)
-		//private.SetAccessible(rf)
 	} else if rud.Kind() == reflect.Struct {
 		rf = rud.MethodByName(name)
-		//private.SetAccessible(rf)
 	} else {
-		private.SetAccessible(reflect.ValueOf(1))
 		state.RaiseError("param1 need struct")
 	}
 
