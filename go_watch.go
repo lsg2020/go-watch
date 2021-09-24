@@ -21,6 +21,7 @@ var exports = map[string]lua.LGFunction{
 
 	"clone":            clone,
 	"reflect2obj":      reflect2obj,
+	"convert":          convert,
 	"call":             call,
 	"call_with_name":   call_with_name,
 	"hotfix_with_name": hotfix_with_name,
@@ -63,9 +64,12 @@ var exports = map[string]lua.LGFunction{
 	"new_uint64":    new_uint64,
 	"new_string":    new_string,
 	"new_with_name": new_with_name,
+	"new_interface": new_interface,
 
-	"get_type_name": get_type_name,
-	"get_func_name": get_func_name,
+	"get_type_name":  get_type_name,
+	"get_func_name":  get_func_name,
+	"get_type":       get_type,
+	"type_with_name": type_with_name,
 }
 
 type Func struct {
@@ -229,7 +233,7 @@ func call_with_name(state *lua.LState) int {
 		v := in.RawGetInt(i)
 		if ud, ok := v.(*lua.LUserData); ok {
 			if r, ok := ud.Value.(reflect.Value); ok {
-				in_types[i-1] = reflect.TypeOf(r.Interface())
+				in_types[i-1] = r.Type()
 				in_values[i-1] = r
 			} else {
 				in_types[i-1] = reflect.TypeOf(ud.Value)
@@ -245,7 +249,9 @@ func call_with_name(state *lua.LState) int {
 		v := out.RawGetInt(i)
 		if ud, ok := v.(*lua.LUserData); ok {
 			if r, ok := ud.Value.(reflect.Value); ok {
-				out_types[i-1] = reflect.TypeOf(r.Interface())
+				out_types[i-1] = r.Type()
+			} else if t, ok := ud.Value.(reflect.Type); ok {
+				out_types[i-1] = t
 			} else {
 				out_types[i-1] = reflect.TypeOf(ud.Value)
 			}
@@ -363,7 +369,9 @@ func hotfix_with_name(state *lua.LState) int {
 		v := in.RawGetInt(i)
 		if ud, ok := v.(*lua.LUserData); ok {
 			if r, ok := ud.Value.(reflect.Value); ok {
-				in_types[i-1] = reflect.TypeOf(r.Interface())
+				in_types[i-1] = r.Type()
+			} else if t, ok := ud.Value.(reflect.Type); ok {
+				in_types[i-1] = t
 			} else {
 				in_types[i-1] = reflect.TypeOf(ud.Value)
 			}
@@ -377,7 +385,9 @@ func hotfix_with_name(state *lua.LState) int {
 		v := out.RawGetInt(i)
 		if ud, ok := v.(*lua.LUserData); ok {
 			if r, ok := ud.Value.(reflect.Value); ok {
-				out_types[i-1] = reflect.TypeOf(r.Interface())
+				out_types[i-1] = r.Type()
+			} else if t, ok := ud.Value.(reflect.Type); ok {
+				out_types[i-1] = t
 			} else {
 				out_types[i-1] = reflect.TypeOf(ud.Value)
 			}
@@ -524,6 +534,31 @@ func reflect2obj(state *lua.LState) int {
 	}
 
 	state.Push(new_userdata(state, rv.Interface()))
+	return 1
+}
+
+func convert(state *lua.LState) int {
+	src_ud := state.CheckUserData(1)
+	to_ud := state.CheckUserData(2)
+	src, ok := src_ud.Value.(reflect.Value)
+	if !ok {
+		state.RaiseError("param1 need reflect.Value")
+	}
+	if src.Kind() != reflect.Ptr && src.Kind() != reflect.Interface {
+		state.RaiseError("param1 need ptr/interface")
+	}
+	var t reflect.Type
+	switch to := to_ud.Value.(type) {
+	case reflect.Value:
+		t = to.Type()
+	case reflect.Type:
+		t = to
+	default:
+		state.RaiseError("param2 need reflect.Value/reflect.Type")
+	}
+
+	ret := src.Elem().Convert(t)
+	state.Push(new_userdata(state, ret))
 	return 1
 }
 
@@ -916,6 +951,9 @@ func load_types() {
 			if typ.Kind() == reflect.Ptr && typ.Elem().Kind() == reflect.Struct {
 				types[typ.Elem().String()] = typ.Elem()
 			}
+			if typ.Kind() == reflect.Ptr && typ.Elem().Kind() == reflect.Interface {
+				types[typ.Elem().String()] = typ.Elem()
+			}
 		}
 	}
 }
@@ -936,6 +974,14 @@ func new_with_name(state *lua.LState) int {
 	}
 
 	state.Push(new_userdata(state, v))
+	return 1
+}
+
+func new_interface(state *lua.LState) int {
+	var tmp []interface{}
+
+	ret := reflect.New(reflect.TypeOf(tmp).Elem()).Elem()
+	state.Push(new_userdata(state, ret))
 	return 1
 }
 
@@ -1162,4 +1208,38 @@ func set_any(state *lua.LState) int {
 		ro.Set(reflect.ValueOf(new_val.Value))
 	}
 	return 0
+}
+
+func get_type(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	var t reflect.Type
+	switch v := ud.Value.(type) {
+	case reflect.Value:
+		t = v.Type()
+	case reflect.Type:
+		t = v
+	default:
+		t = reflect.TypeOf(ud.Value)
+	}
+
+	state.Push(new_userdata(state, t))
+	return 1
+}
+
+func type_with_name(state *lua.LState) int {
+	load_types()
+
+	type_name := state.CheckString(1)
+	ptr := state.CheckBool(2)
+	t, ok := types[type_name]
+	if !ok {
+		state.RaiseError(fmt.Sprintf("type:%s not found", type_name))
+	}
+
+	if ptr {
+		state.Push(new_userdata(state, reflect.PtrTo(t)))
+	} else {
+		state.Push(new_userdata(state, t))
+	}
+	return 1
 }
