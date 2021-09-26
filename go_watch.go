@@ -15,61 +15,65 @@ import (
 const ModuleName = "go_watch"
 const debug_ctx = "go_watch_debug_ctx"
 
-var exports = map[string]lua.LGFunction{
-	"root_get": root_get,
-	"print":    print,
+var exports map[string]lua.LGFunction
 
-	"clone":            clone,
-	"reflect2obj":      reflect2obj,
-	"convert":          convert,
-	"call":             call,
-	"call_with_name":   call_with_name,
-	"hotfix_with_name": hotfix_with_name,
+func init() {
+	exports = map[string]lua.LGFunction{
+		"root_get": root_get,
+		"print":    print,
 
-	"field_get_by_name":  field_get_by_name,
-	"field_set_by_name":  field_set_by_name,
-	"method_get_by_name": method_get_by_name,
+		"clone":            clone,
+		"reflect2obj":      reflect2obj,
+		"convert":          convert,
+		"call":             call,
+		"call_with_name":   call_with_name,
+		"hotfix_with_name": hotfix_with_name,
 
-	"map_get":     map_get,
-	"map_set":     map_set,
-	"map_del":     map_del,
-	"map_foreach": map_foreach,
-	"map_new_key": map_new_key,
-	"map_new_val": map_new_val,
+		"field_get_by_name":  field_get_by_name,
+		"field_set_by_name":  field_set_by_name,
+		"method_get_by_name": method_get_by_name,
 
-	"array_new_elem": array_new_elem,
-	"array_foreach":  array_foreach,
-	"array_get":      array_get,
-	"array_set":      array_set,
-	"array_slice":    array_slice,
-	"slice_append":   slice_append,
+		"map_get":     map_get,
+		"map_set":     map_set,
+		"map_del":     map_del,
+		"map_foreach": map_foreach,
+		"map_new_key": map_new_key,
+		"map_new_val": map_new_val,
 
-	"get_string":  get_string,
-	"set_string":  set_string,
-	"get_number":  get_number,
-	"set_number":  set_number,
-	"get_boolean": get_boolean,
-	"set_boolean": set_boolean,
-	"set_any":     set_any,
+		"array_new_elem": array_new_elem,
+		"array_foreach":  array_foreach,
+		"array_get":      array_get,
+		"array_set":      array_set,
+		"array_slice":    array_slice,
+		"slice_append":   slice_append,
 
-	"new_boolean":   new_boolean,
-	"new_int":       new_int,
-	"new_int8":      new_int8,
-	"new_int16":     new_int16,
-	"new_int32":     new_int32,
-	"new_int64":     new_int64,
-	"new_uint8":     new_uint8,
-	"new_uint16":    new_uint16,
-	"new_uint32":    new_uint32,
-	"new_uint64":    new_uint64,
-	"new_string":    new_string,
-	"new_with_name": new_with_name,
-	"new_interface": new_interface,
+		"get_string":  get_string,
+		"set_string":  set_string,
+		"get_number":  get_number,
+		"set_number":  set_number,
+		"get_boolean": get_boolean,
+		"set_boolean": set_boolean,
+		"set_any":     set_any,
 
-	"get_type_name":  get_type_name,
-	"get_func_name":  get_func_name,
-	"get_type":       get_type,
-	"type_with_name": type_with_name,
+		"new_boolean":   new_boolean,
+		"new_int":       new_int,
+		"new_int8":      new_int8,
+		"new_int16":     new_int16,
+		"new_int32":     new_int32,
+		"new_int64":     new_int64,
+		"new_uint8":     new_uint8,
+		"new_uint16":    new_uint16,
+		"new_uint32":    new_uint32,
+		"new_uint64":    new_uint64,
+		"new_string":    new_string,
+		"new_with_name": new_with_name,
+		"new_interface": new_interface,
+
+		"get_type_name":  get_type_name,
+		"get_func_name":  get_func_name,
+		"get_type":       get_type,
+		"type_with_name": type_with_name,
+	}
 }
 
 type Func struct {
@@ -278,9 +282,13 @@ type HotfixContext struct {
 	fn    *lua.LFunction
 	in    []reflect.Type
 	out   []reflect.Type
+	lock  sync.Mutex
 }
 
 func (ctx *HotfixContext) Do(params []reflect.Value) []reflect.Value {
+	ctx.lock.Lock()
+	defer ctx.lock.Unlock()
+
 	var err error
 	ret := make([]reflect.Value, len(ctx.out))
 	if len(params) != len(ctx.in) {
@@ -401,7 +409,8 @@ func hotfix_with_name(state *lua.LState) int {
 	func_ptr := (*Func)(unsafe.Pointer(func_ptr_val))
 	func_ptr.codePtr = ptr
 
-	hotfix := &HotfixContext{state: state, fn: fn, in: in_types, out: out_types}
+	ctx := get_context(state)
+	hotfix := &HotfixContext{state: NewLuaState(ctx.root, ctx.print), fn: fn, in: in_types, out: out_types}
 	new_func := reflect.MakeFunc(reflect.FuncOf(in_types, out_types, false), hotfix.Do)
 	monkey.Patch(old_func.Interface(), new_func.Interface())
 	return 0
