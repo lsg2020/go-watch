@@ -367,7 +367,10 @@ func hotfix_with_name(state *lua.LState) int {
 		state.RaiseError(fmt.Sprintf("func:%s not found", name))
 	}
 
-	fn, err := state.LoadString(script)
+	ctx := get_context(state)
+	new_state := NewLuaState(ctx.root, ctx.print)
+
+	fn, err := new_state.LoadString(script)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("script error:%v", err))
 	}
@@ -409,8 +412,7 @@ func hotfix_with_name(state *lua.LState) int {
 	func_ptr := (*Func)(unsafe.Pointer(func_ptr_val))
 	func_ptr.codePtr = ptr
 
-	ctx := get_context(state)
-	hotfix := &HotfixContext{state: NewLuaState(ctx.root, ctx.print), fn: fn, in: in_types, out: out_types}
+	hotfix := &HotfixContext{state: new_state, fn: fn, in: in_types, out: out_types}
 	new_func := reflect.MakeFunc(reflect.FuncOf(in_types, out_types, false), hotfix.Do)
 	monkey.Patch(old_func.Interface(), new_func.Interface())
 	return 0
