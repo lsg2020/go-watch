@@ -1,6 +1,7 @@
 package go_watch
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -8,14 +9,15 @@ import (
 	"unsafe"
 
 	"bou.ke/monkey"
-	"github.com/lsg2020/go-forceexport"
 	lua "github.com/yuin/gopher-lua"
+	"github.com/zeebo/goof"
 )
 
-const ModuleName = "go_watch"
+const module_name = "go_watch"
 const debug_ctx = "go_watch_debug_ctx"
 
 var exports map[string]lua.LGFunction
+var goof_troop goof.Troop
 
 func init() {
 	exports = map[string]lua.LGFunction{
@@ -92,7 +94,7 @@ func NewLuaState(root RootFunc, print PrintFunc) *lua.LState {
 	ud := new_userdata(state, &Context{root: root, print: print})
 	state.SetGlobal(debug_ctx, ud)
 
-	state.PreloadModule(ModuleName, func(state *lua.LState) int {
+	state.PreloadModule(module_name, func(state *lua.LState) int {
 		mod := state.SetFuncs(state.NewTable(), exports)
 		state.Push(mod)
 		return 1
@@ -221,12 +223,58 @@ func call(state *lua.LState) int {
 	return len(ret)
 }
 
+var (
+	ErrNotFound = errors.New("not found")
+)
+
+var types map[string]reflect.Type
+var types_mutex sync.Mutex
+
+//go:linkname dwarfName github.com/zeebo/goof.dwarfName
+func dwarfName(rtyp reflect.Type) (out string)
+
+func load_types() {
+	types_mutex.Lock()
+	defer types_mutex.Unlock()
+
+	if types != nil {
+		return
+	}
+
+	goof_check()
+	all_type, _ := goof_troop.Types()
+	types = make(map[string]reflect.Type, len(all_type))
+	for _, t := range all_type {
+		types[dwarfName(t)] = t
+	}
+}
+
+func goof_check() {
+	goof_troop.Global("")
+}
+
+func find_func_with_name(name string) (uintptr, error) {
+	goof_check()
+	rtroop := reflect.ValueOf(goof_troop)
+	functions := rtroop.FieldByName("functions")
+	if !functions.IsValid() {
+		return 0, ErrNotFound
+	}
+	fun := functions.MapIndex(reflect.ValueOf(name))
+	if !fun.IsValid() {
+		return 0, ErrNotFound
+	}
+
+	pc := fun.FieldByName("pc")
+	return uintptr(pc.Uint()), nil
+}
+
 func call_with_name(state *lua.LState) int {
 	name := state.CheckString(1)
 	in := state.CheckTable(2)
 	out := state.CheckTable(3)
 
-	ptr, err := forceexport.FindFuncWithName(name)
+	ptr, err := find_func_with_name(name)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("func:%s not found", name))
 	}
@@ -326,27 +374,16 @@ err_ret:
 	return ret
 }
 
-var all_func_name []string
-var func_name_mutex sync.Mutex
-
-func load_func_name() {
-	func_name_mutex.Lock()
-	defer func_name_mutex.Unlock()
-
-	if all_func_name != nil {
-		return
+func get_func_name(state *lua.LState) int {
+	goof_check()
+	include := state.CheckString(1)
+	functions, err := goof_troop.Functions()
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("system error %s", err.Error()))
 	}
 
-	all_func_name = forceexport.GetAllFuncName()
-}
-
-func get_func_name(state *lua.LState) int {
-	load_func_name()
-
-	include := state.CheckString(1)
-
 	ret := &lua.LTable{}
-	for _, name := range all_func_name {
+	for _, name := range functions {
 		if include == "" || strings.Index(name, include) >= 0 {
 			ret.Append(lua.LString(name))
 		}
@@ -362,7 +399,7 @@ func hotfix_with_name(state *lua.LState) int {
 	in := state.CheckTable(3)
 	out := state.CheckTable(4)
 
-	ptr, err := forceexport.FindFuncWithName(name)
+	ptr, err := find_func_with_name(name)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("func:%s not found", name))
 	}
@@ -927,46 +964,6 @@ func new_string(state *lua.LState) int {
 	val := state.CheckString(1)
 	state.Push(new_userdata(state, val))
 	return 1
-}
-
-//go:linkname typelinks reflect.typelinks
-func typelinks() (sections []unsafe.Pointer, offset [][]int32)
-
-//go:linkname resolveTypeOff reflect.resolveTypeOff
-func resolveTypeOff(rtype unsafe.Pointer, off int32) unsafe.Pointer
-
-type emptyInterface struct {
-	typ  unsafe.Pointer
-	word unsafe.Pointer
-}
-
-var types map[string]reflect.Type
-var types_mutex sync.Mutex
-
-func load_types() {
-	types_mutex.Lock()
-	defer types_mutex.Unlock()
-
-	if types != nil {
-		return
-	}
-
-	types = make(map[string]reflect.Type, 256)
-	var obj interface{} = reflect.TypeOf(0)
-	sections, offset := typelinks()
-	for i, offs := range offset {
-		rodata := sections[i]
-		for _, off := range offs {
-			(*emptyInterface)(unsafe.Pointer(&obj)).word = resolveTypeOff(unsafe.Pointer(rodata), off)
-			typ := obj.(reflect.Type)
-			if typ.Kind() == reflect.Ptr && typ.Elem().Kind() == reflect.Struct {
-				types[typ.Elem().String()] = typ.Elem()
-			}
-			if typ.Kind() == reflect.Ptr && typ.Elem().Kind() == reflect.Interface {
-				types[typ.Elem().String()] = typ.Elem()
-			}
-		}
-	}
 }
 
 func new_with_name(state *lua.LState) int {

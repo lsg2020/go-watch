@@ -23,6 +23,11 @@ func main() {
 	local go_watch = require('go_watch')
 	local role1 = go_watch.root_get('')
 
+	local module_funcs = go_watch.get_type_name("module_data")
+	for i, v in pairs(module_funcs) do
+		print("func found:", i, v)
+	end
+
 	-- call unexport function
 	local r1, r2, r3 = go_watch.call_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", {go_watch.new_int(1), go_watch.new_int(2)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
 	print("call_with_name testAdd:", go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
@@ -49,7 +54,7 @@ func main() {
 		name = go_watch.get_string(name)
 		print("hotfix replace setName  oldName:", go_watch.get_string(go_watch.field_get_by_name(role, "name")), " newName:", name)
 		go_watch.field_set_by_name(role, "name", go_watch.new_string("hotfix name ------" .. name))
-	]], {go_watch.new_with_name("module_data.RoleInfo", true), go_watch.new_string("")}, {})
+	]], {go_watch.new_with_name("github.com/lsg2020/go-watch/examples/module_data.RoleInfo", true), go_watch.new_string("")}, {})
 
 	-- call unexport method
 	go_watch.call_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", {role1, go_watch.new_string("Name by lua")}, {})
