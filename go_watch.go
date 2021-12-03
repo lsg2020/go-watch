@@ -24,12 +24,12 @@ func init() {
 		"root_get": root_get,
 		"print":    print,
 
-		"clone":            clone,
-		"reflect2obj":      reflect2obj,
-		"convert":          convert,
-		"call":             call,
-		"call_with_name":   call_with_name,
-		"hotfix_with_name": hotfix_with_name,
+		"clone":                 clone,
+		"reflect2obj":           reflect2obj,
+		"convert_type_to":       convert_type_to,
+		"call":                  call,
+		"call_func_with_name":   call_func_with_name,
+		"hotfix_func_with_name": hotfix_func_with_name,
 
 		"field_get_by_name":  field_get_by_name,
 		"field_set_by_name":  field_set_by_name,
@@ -71,10 +71,10 @@ func init() {
 		"new_with_name": new_with_name,
 		"new_interface": new_interface,
 
-		"get_type_name":  get_type_name,
-		"get_func_name":  get_func_name,
-		"get_type":       get_type,
-		"type_with_name": type_with_name,
+		"search_type_name":   search_type_name,
+		"search_func_name":   search_func_name,
+		"get_type_with_name": get_type_with_name,
+		"get_obj_type":       get_obj_type,
 	}
 }
 
@@ -269,7 +269,7 @@ func find_func_with_name(name string) (uintptr, error) {
 	return uintptr(pc.Uint()), nil
 }
 
-func call_with_name(state *lua.LState) int {
+func call_func_with_name(state *lua.LState) int {
 	name := state.CheckString(1)
 	in := state.CheckTable(2)
 	out := state.CheckTable(3)
@@ -374,7 +374,7 @@ err_ret:
 	return ret
 }
 
-func get_func_name(state *lua.LState) int {
+func search_func_name(state *lua.LState) int {
 	goof_check()
 	include := state.CheckString(1)
 	functions, err := goof_troop.Functions()
@@ -393,7 +393,7 @@ func get_func_name(state *lua.LState) int {
 	return 1
 }
 
-func hotfix_with_name(state *lua.LState) int {
+func hotfix_func_with_name(state *lua.LState) int {
 	name := state.CheckString(1)
 	script := state.CheckString(2)
 	in := state.CheckTable(3)
@@ -585,7 +585,7 @@ func reflect2obj(state *lua.LState) int {
 	return 1
 }
 
-func convert(state *lua.LState) int {
+func convert_type_to(state *lua.LState) int {
 	src_ud := state.CheckUserData(1)
 	to_ud := state.CheckUserData(2)
 	src, ok := src_ud.Value.(reflect.Value)
@@ -993,7 +993,7 @@ func new_interface(state *lua.LState) int {
 	return 1
 }
 
-func get_type_name(state *lua.LState) int {
+func search_type_name(state *lua.LState) int {
 	load_types()
 
 	include := state.CheckString(1)
@@ -1218,7 +1218,7 @@ func set_any(state *lua.LState) int {
 	return 0
 }
 
-func get_type(state *lua.LState) int {
+func get_obj_type(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	var t reflect.Type
 	switch v := ud.Value.(type) {
@@ -1234,7 +1234,7 @@ func get_type(state *lua.LState) int {
 	return 1
 }
 
-func type_with_name(state *lua.LState) int {
+func get_type_with_name(state *lua.LState) int {
 	load_types()
 
 	type_name := state.CheckString(1)
