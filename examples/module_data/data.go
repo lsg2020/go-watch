@@ -10,6 +10,8 @@ type RoleInfo struct {
 	id    int32
 }
 
+var testGlobalRoleInfo RoleInfo
+
 func (r *RoleInfo) Add(a int, b int) (int, int, int) {
 	return testAdd(a, b)
 }
@@ -42,4 +44,8 @@ func NewData(name string) *TestData {
 	}
 
 	return v
+}
+
+func GetGlobal() *RoleInfo {
+	return &testGlobalRoleInfo
 }
