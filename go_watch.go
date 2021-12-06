@@ -485,12 +485,12 @@ func method_get_by_name(state *lua.LState) int {
 	} else {
 		rud = reflect.ValueOf(ud.Value)
 	}
-	if rud.Kind() == reflect.Ptr && rud.Elem().Kind() == reflect.Struct {
+	if rud.Kind() == reflect.Ptr && (rud.Elem().Kind() == reflect.Struct || rud.Elem().Kind() == reflect.Interface) {
 		rf = rud.MethodByName(name)
-	} else if rud.Kind() == reflect.Struct {
+	} else if rud.Kind() == reflect.Struct || rud.Kind() == reflect.Interface {
 		rf = rud.MethodByName(name)
 	} else {
-		state.RaiseError("param1 need struct")
+		state.RaiseError("param1 need struct/interface")
 	}
 
 	ret := new_userdata(state, rf)
