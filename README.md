@@ -1,17 +1,17 @@
 # go-watch
 * 使用[monkey patching](https://github.com/bouk/monkey)配合lua脚本运行时替换修复函数
-* 使用[go-forceexport](https://github.com/AlaxLee/go-forceexport)执行未导出的私有函数
+* 使用[goof](https://github.com/zeebo/goof)查找调试符号,执行未导出的私有函数及全局变量
 * 使用反射运行时打印修改程序内部状态,方便调试
 
 ## 注意
-* 内联优化过的函数会找不到,可以使用`go run -gcflags=all=-l`关闭内联优化
+* 内联优化过的函数会找不到,可以使用`go build -gcflags=all=-l`关闭内联优化
 * 修复及执行函数并不十分安全,生产环境谨慎使用
 * 目前测试过的版本go 1.14/1.15/1.16
 
 
 ## 快速使用
 * 引入包 `import "github.com/lsg2020/go-watch"`
-* 创建lua vm `state := go_watch.NewLuaState(root, print)`
+* 创建lua vm `state, err := go_watch.NewLuaState(root, print)`
     * `root`: `func(name string) interface{}` 根据name返回root数据
     * `print`: `func(session int, str string)` lua print函数的输出回调
 * 执行打印修复的lua脚本 `err := go_watch.Execute(state, script)`
@@ -97,6 +97,8 @@ go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(
 ## Thanks
 
 [https://github.com/bouk/monkey](https://github.com/bouk/monkey)
+
+[github.com/zeebo/goof](github.com/zeebo/goof)
 
 [https://github.com/AlaxLee/go-forceexport](https://github.com/AlaxLee/go-forceexport)
 

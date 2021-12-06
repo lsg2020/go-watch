@@ -3,19 +3,23 @@ package main
 import (
 	"fmt"
 
-	"github.com/lsg2020/go-watch"
+	go_watch "github.com/lsg2020/go-watch"
 	"github.com/lsg2020/go-watch/examples/module_data"
 )
 
 var data *module_data.TestData = module_data.NewData("TEST DATA NAME")
 
 func main() {
-	state := go_watch.NewLuaState(func(name string) interface{} {
+	state, err := go_watch.NewLuaState(func(name string) interface{} {
 		return data
 	}, func(session int, str string) {
 		fmt.Println("lua print:", session, str)
 	})
 	defer state.Close()
+
+	if err != nil {
+		panic(err)
+	}
 
 	fmt.Printf("%#v\n", data)
 
@@ -53,7 +57,7 @@ func main() {
 		local role = go_watch.array_new_elem(slice1)
 		go_watch.field_set_by_name(role, "name", go_watch.new_string("role:"..i))
 		go_watch.field_set_by_name(role, "level", go_watch.new_int32(i))
-		go_watch.field_set_by_name(root, "slice1", go_watch.slice_append(slice1, go_watch.clone(role, false)))
+		go_watch.field_set_by_name(root, "slice1", go_watch.slice_append(slice1, go_watch.ptr_to_val(go_watch.clone(role))))
 	end
 
 	`, 1); err != nil {

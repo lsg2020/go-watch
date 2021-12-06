@@ -10,12 +10,16 @@ import (
 var data = module_data.NewRole(1, "", 1)
 
 func main() {
-	state := go_watch.NewLuaState(func(name string) interface{} {
+	state, err := go_watch.NewLuaState(func(name string) interface{} {
 		return data
 	}, func(session int, str string) {
 		fmt.Println("lua print:", session, str)
 	})
 	defer state.Close()
+
+	if err != nil {
+		panic(err)
+	}
 
 	fmt.Printf("%#v\n", data)
 
