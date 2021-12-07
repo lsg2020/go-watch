@@ -986,17 +986,21 @@ func new_int32(state *lua.LState) int {
 	return 1
 }
 func new_int64(state *lua.LState) int {
-	strVal := ""
-	val := state.Get(1)
-	if val.Type() == lua.LTNumber {
-		strVal = strconv.FormatInt(int64(state.CheckNumber(1)), 10)
-	} else if val.Type() == lua.LTString {
-		strVal = state.CheckString(1)
+	var val int64
+	lval := state.Get(1)
+	if lval.Type() == lua.LTNumber {
+		val = int64(state.CheckNumber(1))
+	} else if lval.Type() == lua.LTString {
+		var err error
+		val, err = strconv.ParseInt(state.CheckString(1), 10, 64)
+		if err != nil {
+			state.RaiseError("param1 parse int error")
+		}
 	} else {
 		state.RaiseError("param1 need number/string")
 	}
 
-	state.Push(new_userdata(state, strVal))
+	state.Push(new_userdata(state, val))
 	return 1
 }
 func new_uint8(state *lua.LState) int {
@@ -1015,17 +1019,21 @@ func new_uint32(state *lua.LState) int {
 	return 1
 }
 func new_uint64(state *lua.LState) int {
-	strVal := ""
-	val := state.Get(1)
-	if val.Type() == lua.LTNumber {
-		strVal = strconv.FormatUint(uint64(state.CheckNumber(1)), 10)
-	} else if val.Type() == lua.LTString {
-		strVal = state.CheckString(1)
+	var val uint64
+	lval := state.Get(1)
+	if lval.Type() == lua.LTNumber {
+		val = uint64(state.CheckNumber(1))
+	} else if lval.Type() == lua.LTString {
+		var err error
+		val, err = strconv.ParseUint(state.CheckString(1), 10, 64)
+		if err != nil {
+			state.RaiseError("param1 parse int error")
+		}
 	} else {
 		state.RaiseError("param1 need number/string")
 	}
 
-	state.Push(new_userdata(state, strVal))
+	state.Push(new_userdata(state, val))
 	return 1
 }
 func new_string(state *lua.LState) int {
