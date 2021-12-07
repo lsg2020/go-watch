@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"unsafe"
@@ -985,8 +986,17 @@ func new_int32(state *lua.LState) int {
 	return 1
 }
 func new_int64(state *lua.LState) int {
-	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, int64(val)))
+	strVal := ""
+	val := state.Get(1)
+	if val.Type() == lua.LTNumber {
+		strVal = strconv.FormatInt(int64(state.CheckNumber(1)), 10)
+	} else if val.Type() == lua.LTString {
+		strVal = state.CheckString(1)
+	} else {
+		state.RaiseError("param1 need number/string")
+	}
+
+	state.Push(new_userdata(state, strVal))
 	return 1
 }
 func new_uint8(state *lua.LState) int {
@@ -1005,8 +1015,17 @@ func new_uint32(state *lua.LState) int {
 	return 1
 }
 func new_uint64(state *lua.LState) int {
-	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, uint64(val)))
+	strVal := ""
+	val := state.Get(1)
+	if val.Type() == lua.LTNumber {
+		strVal = strconv.FormatUint(uint64(state.CheckNumber(1)), 10)
+	} else if val.Type() == lua.LTString {
+		strVal = state.CheckString(1)
+	} else {
+		state.RaiseError("param1 need number/string")
+	}
+
+	state.Push(new_userdata(state, strVal))
 	return 1
 }
 func new_string(state *lua.LState) int {
@@ -1172,7 +1191,7 @@ func get_number(state *lua.LState) int {
 		state.Push(lua.LNumber(v))
 		return 1
 	case int64:
-		state.Push(lua.LNumber(v))
+		state.Push(lua.LString(strconv.FormatInt(v, 10)))
 		return 1
 	case uint:
 		state.Push(lua.LNumber(v))
@@ -1187,7 +1206,7 @@ func get_number(state *lua.LState) int {
 		state.Push(lua.LNumber(v))
 		return 1
 	case uint64:
-		state.Push(lua.LNumber(v))
+		state.Push(lua.LString(strconv.FormatUint(v, 10)))
 		return 1
 	case float32:
 		state.Push(lua.LNumber(v))
@@ -1202,10 +1221,16 @@ func get_number(state *lua.LState) int {
 		}
 
 		switch v.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		case reflect.Int64:
+			state.Push(lua.LString(strconv.FormatInt(v.Int(), 10)))
+			return 1
+		case reflect.Uint64:
+			state.Push(lua.LString(strconv.FormatUint(v.Uint(), 10)))
+			return 1
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
 			state.Push(lua.LNumber(v.Int()))
 			return 1
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uintptr:
 			state.Push(lua.LNumber(v.Uint()))
 			return 1
 		case reflect.Float32, reflect.Float64:
@@ -1223,7 +1248,6 @@ func get_number(state *lua.LState) int {
 
 func set_number(state *lua.LState) int {
 	old_val := state.CheckUserData(1)
-	new_val := state.CheckNumber(2)
 
 	ro, ok := old_val.Value.(reflect.Value)
 	if !ok {
@@ -1235,10 +1259,37 @@ func set_number(state *lua.LState) int {
 	}
 	switch ro.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		ro.SetInt(int64(new_val))
+		new_val := state.Get(2)
+		var int_val int64
+		var err error
+		if new_val.Type() == lua.LTNumber {
+			int_val = int64(state.CheckNumber(2))
+		} else if new_val.Type() == lua.LTString {
+			int_val, err = strconv.ParseInt(state.CheckString(2), 10, 64)
+			if err != nil {
+				state.RaiseError("param2 parse int error")
+			}
+		} else {
+			state.RaiseError("param2 need number/string")
+		}
+		ro.SetInt(int_val)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		ro.SetUint(uint64(new_val))
+		new_val := state.Get(2)
+		var int_val uint64
+		var err error
+		if new_val.Type() == lua.LTNumber {
+			int_val = uint64(state.CheckNumber(2))
+		} else if new_val.Type() == lua.LTString {
+			int_val, err = strconv.ParseUint(state.CheckString(2), 10, 64)
+			if err != nil {
+				state.RaiseError("param2 parse int error")
+			}
+		} else {
+			state.RaiseError("param2 need number/string")
+		}
+		ro.SetUint(int_val)
 	case reflect.Float32, reflect.Float64:
+		new_val := state.CheckNumber(2)
 		ro.SetFloat(float64(new_val))
 	default:
 		state.RaiseError(fmt.Sprintf("field is %s %s need number type", ro.Type(), ro.Kind()))
