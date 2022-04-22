@@ -22,65 +22,65 @@ var goofTroop goof.Troop
 
 func init() {
 	exports = map[string]lua.LGFunction{
-		"root_get": root_get,
-		"print":    print,
+		"root_get": lRootGet,
+		"print":    lPrint,
 
-		"search_type_name":     search_type_name,
-		"search_func_name":     search_func_name,
-		"search_global_name":   search_global_name,
-		"get_type_with_name":   get_type_with_name,
-		"get_obj_type":         get_obj_type,
-		"get_global_with_name": get_global_with_name,
+		"search_type_name":     lSearchTypeName,
+		"search_func_name":     lSearchFuncName,
+		"search_global_name":   lSearchGlobalName,
+		"get_type_with_name":   lGetTypeWithName,
+		"get_obj_type":         lGetObjType,
+		"get_global_with_name": lGetGlobalWithName,
 
-		"clone":                 clone,
-		"ptr_to_val":            ptr_to_val,
-		"val_to_ptr":            val_to_ptr,
-		"convert_type_to":       convert_type_to,
-		"call":                  call,
-		"call_func_with_name":   call_func_with_name,
-		"hotfix_func_with_name": hotfix_func_with_name,
+		"clone":                 lClone,
+		"ptr_to_val":            lPtrToVal,
+		"val_to_ptr":            lValToPtr,
+		"convert_type_to":       lConvertTypeTo,
+		"call":                  lCall,
+		"call_func_with_name":   lCallFuncWithName,
+		"hotfix_func_with_name": lHotfixFuncWithName,
 
-		"field_get_by_name":  field_get_by_name,
-		"field_set_by_name":  field_set_by_name,
-		"method_get_by_name": method_get_by_name,
+		"field_get_by_name":  lFieldGetByName,
+		"field_set_by_name":  lFieldSetByName,
+		"method_get_by_name": lMethodGetByName,
 
-		"map_get":     map_get,
-		"map_set":     map_set,
-		"map_del":     map_del,
-		"map_foreach": map_foreach,
-		"map_new_key": map_new_key,
-		"map_new_val": map_new_val,
-		"map_make":    map_make,
+		"map_get":     lMapGet,
+		"map_set":     lMapSet,
+		"map_del":     lMapDel,
+		"map_foreach": lMapForeach,
+		"map_new_key": lMapNewKey,
+		"map_new_val": lMapNewVal,
+		"map_make":    lMapMake,
 
-		"array_new_elem": array_new_elem,
-		"array_foreach":  array_foreach,
-		"array_get":      array_get,
-		"array_set":      array_set,
-		"array_slice":    array_slice,
-		"slice_append":   slice_append,
-		"slice_make":     slice_make,
+		"array_new_elem": lArrayNewElem,
+		"array_foreach":  lArrayForeach,
+		"array_get":      lArrayGet,
+		"array_set":      lArraySet,
+		"array_slice":    lArraySlice,
+		"slice_append":   lSliceAppend,
+		"slice_make":     lSliceMake,
 
-		"get_string":  get_string,
-		"set_string":  set_string,
-		"get_number":  get_number,
-		"set_number":  set_number,
-		"get_boolean": get_boolean,
-		"set_boolean": set_boolean,
-		"set_any":     set_any,
+		"get_string":  lGetString,
+		"set_string":  lSetString,
+		"get_number":  lGetNumber,
+		"set_number":  lSetNumber,
+		"get_boolean": lGetBoolean,
+		"set_boolean": lSetBoolean,
+		"set_any":     lSetAny,
 
-		"new_boolean":   new_boolean,
-		"new_int":       new_int,
-		"new_int8":      new_int8,
-		"new_int16":     new_int16,
-		"new_int32":     new_int32,
-		"new_int64":     new_int64,
-		"new_uint8":     new_uint8,
-		"new_uint16":    new_uint16,
-		"new_uint32":    new_uint32,
-		"new_uint64":    new_uint64,
-		"new_string":    new_string,
-		"new_with_name": new_with_name,
-		"new_interface": new_interface,
+		"new_boolean":   lNewBoolean,
+		"new_int":       lNewInt,
+		"new_int8":      lNewInt8,
+		"new_int16":     lNewInt16,
+		"new_int32":     lNewInt32,
+		"new_int64":     lNewInt64,
+		"new_uint8":     lNewUint8,
+		"new_uint16":    lNewUint16,
+		"new_uint32":    lNewUint32,
+		"new_uint64":    lNewUint64,
+		"new_string":    lNewString,
+		"new_with_name": lNewWithName,
+		"new_interface": lNewInterface,
 	}
 }
 
@@ -102,7 +102,7 @@ func NewLuaState(root RootFunc, print PrintFunc) (*lua.LState, error) {
 	}
 
 	state := lua.NewState()
-	ud := new_userdata(state, &Context{root: root, print: print})
+	ud := newUserData(state, &Context{root: root, print: print})
 	state.SetGlobal(debugCtx, ud)
 
 	state.PreloadModule(moduleName, func(state *lua.LState) int {
@@ -160,13 +160,13 @@ func Execute(state *lua.LState, script string, session int) error {
 
 }
 
-func new_userdata(state *lua.LState, data interface{}) *lua.LUserData {
+func newUserData(state *lua.LState, data interface{}) *lua.LUserData {
 	ud := state.NewUserData()
 	ud.Value = data
 	return ud
 }
 
-func get_context(state *lua.LState) (ctx *Context) {
+func getContext(state *lua.LState) (ctx *Context) {
 	ud, ok := state.GetGlobal(debugCtx).(*lua.LUserData)
 	if !ok {
 		state.RaiseError("debug_ctx error")
@@ -179,17 +179,17 @@ func get_context(state *lua.LState) (ctx *Context) {
 	return
 }
 
-func root_get(state *lua.LState) int {
-	ctx := get_context(state)
+func lRootGet(state *lua.LState) int {
+	ctx := getContext(state)
 	name := state.CheckString(1)
 
-	ud := new_userdata(state, ctx.root(name))
+	ud := newUserData(state, ctx.root(name))
 	state.Push(ud)
 	return 1
 }
 
-func print(state *lua.LState) int {
-	ctx := get_context(state)
+func lPrint(state *lua.LState) int {
+	ctx := getContext(state)
 
 	session := state.CheckNumber(1)
 	str := state.CheckString(2)
@@ -198,7 +198,7 @@ func print(state *lua.LState) int {
 	return 0
 }
 
-func call(state *lua.LState) int {
+func lCall(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	paramList := make([]reflect.Value, 0, state.GetTop()-1)
 	for i := 1; i < state.GetTop(); i++ {
@@ -227,7 +227,7 @@ func call(state *lua.LState) int {
 	}
 
 	for _, r := range ret {
-		ud := new_userdata(state, r)
+		ud := newUserData(state, r)
 		state.Push(ud)
 	}
 
@@ -244,7 +244,7 @@ var typesMutex sync.Mutex
 //go:linkname dwarfName github.com/zeebo/goof.dwarfName
 func dwarfName(rtyp reflect.Type) (out string)
 
-func load_types() {
+func loadTypes() {
 	typesMutex.Lock()
 	defer typesMutex.Unlock()
 
@@ -259,7 +259,7 @@ func load_types() {
 	}
 }
 
-func find_func_with_name(name string) (uintptr, error) {
+func findFuncWithName(name string) (uintptr, error) {
 	rtroop := reflect.ValueOf(goofTroop)
 	functions := rtroop.FieldByName("functions")
 	if !functions.IsValid() {
@@ -274,12 +274,12 @@ func find_func_with_name(name string) (uintptr, error) {
 	return uintptr(pc.Uint()), nil
 }
 
-func call_func_with_name(state *lua.LState) int {
+func lCallFuncWithName(state *lua.LState) int {
 	name := state.CheckString(1)
 	in := state.CheckTable(2)
 	out := state.CheckTable(3)
 
-	ptr, err := find_func_with_name(name)
+	ptr, err := findFuncWithName(name)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("func:%s not found", name))
 	}
@@ -324,7 +324,7 @@ func call_func_with_name(state *lua.LState) int {
 
 	ret := newFunc.Call(inValues)
 	for _, r := range ret {
-		ud := new_userdata(state, r)
+		ud := newUserData(state, r)
 		state.Push(ud)
 	}
 	return len(ret)
@@ -351,7 +351,7 @@ func (ctx *HotfixContext) Do(params []reflect.Value) []reflect.Value {
 
 	ctx.state.Push(ctx.fn)
 	for _, param := range params {
-		ctx.state.Push(new_userdata(ctx.state, param))
+		ctx.state.Push(newUserData(ctx.state, param))
 	}
 
 	err = ctx.state.PCall(len(params), len(ctx.out), nil)
@@ -381,7 +381,7 @@ err_ret:
 	return ret
 }
 
-func search_func_name(state *lua.LState) int {
+func lSearchFuncName(state *lua.LState) int {
 	include := state.CheckString(1)
 	functions, err := goofTroop.Functions()
 	if err != nil {
@@ -399,7 +399,7 @@ func search_func_name(state *lua.LState) int {
 	return 1
 }
 
-func search_global_name(state *lua.LState) int {
+func lSearchGlobalName(state *lua.LState) int {
 	include := state.CheckString(1)
 	globals, err := goofTroop.Globals()
 	if err != nil {
@@ -417,18 +417,18 @@ func search_global_name(state *lua.LState) int {
 	return 1
 }
 
-func hotfix_func_with_name(state *lua.LState) int {
+func lHotfixFuncWithName(state *lua.LState) int {
 	name := state.CheckString(1)
 	script := state.CheckString(2)
 	in := state.CheckTable(3)
 	out := state.CheckTable(4)
 
-	ptr, err := find_func_with_name(name)
+	ptr, err := findFuncWithName(name)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("func:%s not found", name))
 	}
 
-	ctx := get_context(state)
+	ctx := getContext(state)
 	newState, _ := NewLuaState(ctx.root, ctx.print)
 
 	fn, err := newState.LoadString(script)
@@ -479,7 +479,7 @@ func hotfix_func_with_name(state *lua.LState) int {
 	return 0
 }
 
-func method_get_by_name(state *lua.LState) int {
+func lMethodGetByName(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	name := state.CheckString(2)
 
@@ -498,12 +498,12 @@ func method_get_by_name(state *lua.LState) int {
 		state.RaiseError("param1 need struct/interface")
 	}
 
-	ret := new_userdata(state, rf)
+	ret := newUserData(state, rf)
 	state.Push(ret)
 	return 1
 }
 
-func field_get_by_name(state *lua.LState) int {
+func lFieldGetByName(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	name := state.CheckString(2)
 
@@ -531,12 +531,12 @@ func field_get_by_name(state *lua.LState) int {
 		state.RaiseError("param1 need struct")
 	}
 
-	ret := new_userdata(state, rf)
+	ret := newUserData(state, rf)
 	state.Push(ret)
 	return 1
 }
 
-func field_set_by_name(state *lua.LState) int {
+func lFieldSetByName(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	name := state.CheckString(2)
 	newVal := state.CheckUserData(3)
@@ -569,7 +569,7 @@ func field_set_by_name(state *lua.LState) int {
 	return 0
 }
 
-func ptr_to_val(state *lua.LState) int {
+func lPtrToVal(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	var rf reflect.Value
 	if r, ok := ud.Value.(reflect.Value); ok {
@@ -581,11 +581,11 @@ func ptr_to_val(state *lua.LState) int {
 		state.RaiseError("param1 need pointer")
 	}
 
-	state.Push(new_userdata(state, rf.Elem()))
+	state.Push(newUserData(state, rf.Elem()))
 	return 1
 }
 
-func val_to_ptr(state *lua.LState) int {
+func lValToPtr(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	var rf reflect.Value
 	if r, ok := ud.Value.(reflect.Value); ok {
@@ -598,11 +598,11 @@ func val_to_ptr(state *lua.LState) int {
 		state.RaiseError("param1 convert pointer error")
 	}
 
-	state.Push(new_userdata(state, rf.Addr()))
+	state.Push(newUserData(state, rf.Addr()))
 	return 1
 }
 
-func clone(state *lua.LState) int {
+func lClone(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	//ret_ptr := state.CheckBool(2)
 
@@ -614,7 +614,7 @@ func clone(state *lua.LState) int {
 
 	newRs = reflect.New(rud.Type())
 	newRs.Elem().Set(rud)
-	state.Push(new_userdata(state, newRs.Elem()))
+	state.Push(newUserData(state, newRs.Elem()))
 	return 1
 
 	/*
@@ -630,16 +630,16 @@ func clone(state *lua.LState) int {
 
 		var ret *lua.LUserData
 		if ret_ptr {
-			ret = new_userdata(state, new_rs)
+			ret = newUserData(state, new_rs)
 		} else {
-			ret = new_userdata(state, new_rs.Elem())
+			ret = newUserData(state, new_rs.Elem())
 		}
 		state.Push(ret)
 		return 1
 	*/
 }
 
-func convert_type_to(state *lua.LState) int {
+func lConvertTypeTo(state *lua.LState) int {
 	srcUd := state.CheckUserData(1)
 	toUd := state.CheckUserData(2)
 	src, ok := srcUd.Value.(reflect.Value)
@@ -660,11 +660,11 @@ func convert_type_to(state *lua.LState) int {
 	}
 
 	ret := src.Elem().Convert(t)
-	state.Push(new_userdata(state, ret))
+	state.Push(newUserData(state, ret))
 	return 1
 }
 
-func map_get(state *lua.LState) int {
+func lMapGet(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	k := state.CheckUserData(2)
 
@@ -688,11 +688,11 @@ func map_get(state *lua.LState) int {
 		return 0
 	}
 	// ret.CanInterface
-	state.Push(new_userdata(state, ret))
+	state.Push(newUserData(state, ret))
 	return 1
 }
 
-func map_set(state *lua.LState) int {
+func lMapSet(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	k := state.CheckUserData(2)
 	v := state.CheckUserData(3)
@@ -720,7 +720,7 @@ func map_set(state *lua.LState) int {
 	return 0
 }
 
-func map_del(state *lua.LState) int {
+func lMapDel(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	k := state.CheckUserData(2)
 
@@ -742,7 +742,7 @@ func map_del(state *lua.LState) int {
 	return 0
 }
 
-func map_foreach(state *lua.LState) int {
+func lMapForeach(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	cb := state.CheckFunction(2)
 
@@ -761,8 +761,8 @@ func map_foreach(state *lua.LState) int {
 		v := iter.Value()
 
 		state.Push(cb)
-		state.Push(new_userdata(state, k))
-		state.Push(new_userdata(state, v))
+		state.Push(newUserData(state, k))
+		state.Push(newUserData(state, v))
 		state.Call(2, 1)
 
 		ret := state.CheckNumber(-1)
@@ -776,7 +776,7 @@ func map_foreach(state *lua.LState) int {
 	return 0
 }
 
-func map_new_key(state *lua.LState) int {
+func lMapNewKey(state *lua.LState) int {
 	m := state.CheckUserData(1)
 
 	rf, ok := m.Value.(reflect.Value)
@@ -796,11 +796,11 @@ func map_new_key(state *lua.LState) int {
 		v = reflect.New(keyType)
 	}
 
-	state.Push(new_userdata(state, v))
+	state.Push(newUserData(state, v))
 	return 1
 }
 
-func map_new_val(state *lua.LState) int {
+func lMapNewVal(state *lua.LState) int {
 	m := state.CheckUserData(1)
 
 	rf, ok := m.Value.(reflect.Value)
@@ -820,11 +820,11 @@ func map_new_val(state *lua.LState) int {
 		v = reflect.New(elemType)
 	}
 
-	state.Push(new_userdata(state, v))
+	state.Push(newUserData(state, v))
 	return 1
 }
 
-func map_make(state *lua.LState) int {
+func lMapMake(state *lua.LState) int {
 	m := state.CheckUserData(1)
 
 	var mapType reflect.Type
@@ -837,11 +837,11 @@ func map_make(state *lua.LState) int {
 		mapType = reflect.TypeOf(t)
 	}
 	v := reflect.MakeMap(mapType)
-	state.Push(new_userdata(state, v))
+	state.Push(newUserData(state, v))
 	return 1
 }
 
-func array_new_elem(state *lua.LState) int {
+func lArrayNewElem(state *lua.LState) int {
 	m := state.CheckUserData(1)
 
 	rf, ok := m.Value.(reflect.Value)
@@ -861,11 +861,11 @@ func array_new_elem(state *lua.LState) int {
 		v = reflect.New(elemType)
 	}
 
-	state.Push(new_userdata(state, v))
+	state.Push(newUserData(state, v))
 	return 1
 }
 
-func array_foreach(state *lua.LState) int {
+func lArrayForeach(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	cb := state.CheckFunction(2)
 
@@ -883,7 +883,7 @@ func array_foreach(state *lua.LState) int {
 
 		state.Push(cb)
 		state.Push(lua.LNumber(i))
-		state.Push(new_userdata(state, v))
+		state.Push(newUserData(state, v))
 		state.Call(2, 1)
 
 		ret := state.CheckNumber(-1)
@@ -896,7 +896,7 @@ func array_foreach(state *lua.LState) int {
 	return 0
 }
 
-func array_get(state *lua.LState) int {
+func lArrayGet(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	i := state.CheckNumber(2)
 
@@ -910,11 +910,11 @@ func array_get(state *lua.LState) int {
 	}
 
 	v := rf.Index(int(i))
-	state.Push(new_userdata(state, v))
+	state.Push(newUserData(state, v))
 	return 1
 }
 
-func array_set(state *lua.LState) int {
+func lArraySet(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	i := state.CheckNumber(2)
 	new_v := state.CheckUserData(3)
@@ -938,7 +938,7 @@ func array_set(state *lua.LState) int {
 	return 0
 }
 
-func array_slice(state *lua.LState) int {
+func lArraySlice(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	i := state.CheckNumber(2)
 	j := state.CheckNumber(3)
@@ -953,11 +953,11 @@ func array_slice(state *lua.LState) int {
 	}
 
 	ret := rf.Slice(int(i), int(j))
-	state.Push(new_userdata(state, ret))
+	state.Push(newUserData(state, ret))
 	return 1
 }
 
-func slice_append(state *lua.LState) int {
+func lSliceAppend(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	v := state.CheckUserData(2)
 
@@ -977,11 +977,11 @@ func slice_append(state *lua.LState) int {
 		newSlice = reflect.Append(rf, reflect.ValueOf(v.Value))
 	}
 
-	state.Push(new_userdata(state, newSlice))
+	state.Push(newUserData(state, newSlice))
 	return 1
 }
 
-func slice_make(state *lua.LState) int {
+func lSliceMake(state *lua.LState) int {
 	m := state.CheckUserData(1)
 	len := state.CheckNumber(2)
 	cap := state.CheckNumber(3)
@@ -996,36 +996,36 @@ func slice_make(state *lua.LState) int {
 		sliceType = reflect.TypeOf(t)
 	}
 	v := reflect.MakeSlice(sliceType, int(len), int(cap))
-	state.Push(new_userdata(state, v))
+	state.Push(newUserData(state, v))
 	return 1
 }
 
-func new_boolean(state *lua.LState) int {
+func lNewBoolean(state *lua.LState) int {
 	val := state.CheckBool(1)
-	state.Push(new_userdata(state, bool(val)))
+	state.Push(newUserData(state, bool(val)))
 	return 1
 }
-func new_int(state *lua.LState) int {
+func lNewInt(state *lua.LState) int {
 	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, int(val)))
+	state.Push(newUserData(state, int(val)))
 	return 1
 }
-func new_int8(state *lua.LState) int {
+func lNewInt8(state *lua.LState) int {
 	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, int8(val)))
+	state.Push(newUserData(state, int8(val)))
 	return 1
 }
-func new_int16(state *lua.LState) int {
+func lNewInt16(state *lua.LState) int {
 	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, int16(val)))
+	state.Push(newUserData(state, int16(val)))
 	return 1
 }
-func new_int32(state *lua.LState) int {
+func lNewInt32(state *lua.LState) int {
 	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, int32(val)))
+	state.Push(newUserData(state, int32(val)))
 	return 1
 }
-func new_int64(state *lua.LState) int {
+func lNewInt64(state *lua.LState) int {
 	var val int64
 	lval := state.Get(1)
 	if lval.Type() == lua.LTNumber {
@@ -1040,25 +1040,25 @@ func new_int64(state *lua.LState) int {
 		state.RaiseError("param1 need number/string")
 	}
 
-	state.Push(new_userdata(state, val))
+	state.Push(newUserData(state, val))
 	return 1
 }
-func new_uint8(state *lua.LState) int {
+func lNewUint8(state *lua.LState) int {
 	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, uint8(val)))
+	state.Push(newUserData(state, uint8(val)))
 	return 1
 }
-func new_uint16(state *lua.LState) int {
+func lNewUint16(state *lua.LState) int {
 	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, uint16(val)))
+	state.Push(newUserData(state, uint16(val)))
 	return 1
 }
-func new_uint32(state *lua.LState) int {
+func lNewUint32(state *lua.LState) int {
 	val := state.CheckNumber(1)
-	state.Push(new_userdata(state, uint32(val)))
+	state.Push(newUserData(state, uint32(val)))
 	return 1
 }
-func new_uint64(state *lua.LState) int {
+func lNewUint64(state *lua.LState) int {
 	var val uint64
 	lval := state.Get(1)
 	if lval.Type() == lua.LTNumber {
@@ -1073,17 +1073,17 @@ func new_uint64(state *lua.LState) int {
 		state.RaiseError("param1 need number/string")
 	}
 
-	state.Push(new_userdata(state, val))
+	state.Push(newUserData(state, val))
 	return 1
 }
-func new_string(state *lua.LState) int {
+func lNewString(state *lua.LState) int {
 	val := state.CheckString(1)
-	state.Push(new_userdata(state, val))
+	state.Push(newUserData(state, val))
 	return 1
 }
 
-func new_with_name(state *lua.LState) int {
-	load_types()
+func lNewWithName(state *lua.LState) int {
+	loadTypes()
 
 	typeName := state.CheckString(1)
 	usePtr := state.CheckBool(2)
@@ -1097,20 +1097,20 @@ func new_with_name(state *lua.LState) int {
 		v = v.Elem()
 	}
 
-	state.Push(new_userdata(state, v))
+	state.Push(newUserData(state, v))
 	return 1
 }
 
-func new_interface(state *lua.LState) int {
+func lNewInterface(state *lua.LState) int {
 	var tmp []interface{}
 
 	ret := reflect.New(reflect.TypeOf(tmp).Elem()).Elem()
-	state.Push(new_userdata(state, ret))
+	state.Push(newUserData(state, ret))
 	return 1
 }
 
-func search_type_name(state *lua.LState) int {
-	load_types()
+func lSearchTypeName(state *lua.LState) int {
+	loadTypes()
 
 	include := state.CheckString(1)
 
@@ -1125,7 +1125,7 @@ func search_type_name(state *lua.LState) int {
 	return 1
 }
 
-func get_boolean(state *lua.LState) int {
+func lGetBoolean(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 
 	var b bool
@@ -1153,7 +1153,7 @@ func get_boolean(state *lua.LState) int {
 	return 1
 }
 
-func set_boolean(state *lua.LState) int {
+func lSetBoolean(state *lua.LState) int {
 	oldVal := state.CheckUserData(1)
 	newVal := state.CheckBool(2)
 
@@ -1173,7 +1173,7 @@ func set_boolean(state *lua.LState) int {
 	return 0
 }
 
-func get_string(state *lua.LState) int {
+func lGetString(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 
 	var str string
@@ -1201,7 +1201,7 @@ func get_string(state *lua.LState) int {
 	return 1
 }
 
-func set_string(state *lua.LState) int {
+func lSetString(state *lua.LState) int {
 	oldVal := state.CheckUserData(1)
 	newVal := state.CheckString(2)
 
@@ -1222,7 +1222,7 @@ func set_string(state *lua.LState) int {
 	return 0
 }
 
-func get_number(state *lua.LState) int {
+func lGetNumber(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 
 	switch v := ud.Value.(type) {
@@ -1294,7 +1294,7 @@ func get_number(state *lua.LState) int {
 	}
 }
 
-func set_number(state *lua.LState) int {
+func lSetNumber(state *lua.LState) int {
 	oldVal := state.CheckUserData(1)
 
 	ro, ok := oldVal.Value.(reflect.Value)
@@ -1345,7 +1345,7 @@ func set_number(state *lua.LState) int {
 	return 0
 }
 
-func set_any(state *lua.LState) int {
+func lSetAny(state *lua.LState) int {
 	oldVal := state.CheckUserData(1)
 	newVal := state.CheckUserData(2)
 
@@ -1366,7 +1366,7 @@ func set_any(state *lua.LState) int {
 	return 0
 }
 
-func get_obj_type(state *lua.LState) int {
+func lGetObjType(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	var t reflect.Type
 	switch v := ud.Value.(type) {
@@ -1378,12 +1378,12 @@ func get_obj_type(state *lua.LState) int {
 		t = reflect.TypeOf(ud.Value)
 	}
 
-	state.Push(new_userdata(state, t))
+	state.Push(newUserData(state, t))
 	return 1
 }
 
-func get_type_with_name(state *lua.LState) int {
-	load_types()
+func lGetTypeWithName(state *lua.LState) int {
+	loadTypes()
 
 	typeName := state.CheckString(1)
 	ptr := state.CheckBool(2)
@@ -1393,20 +1393,20 @@ func get_type_with_name(state *lua.LState) int {
 	}
 
 	if ptr {
-		state.Push(new_userdata(state, reflect.PtrTo(t)))
+		state.Push(newUserData(state, reflect.PtrTo(t)))
 	} else {
-		state.Push(new_userdata(state, t))
+		state.Push(newUserData(state, t))
 	}
 	return 1
 }
 
-func get_global_with_name(state *lua.LState) int {
+func lGetGlobalWithName(state *lua.LState) int {
 	globalName := state.CheckString(1)
 	global, err := goofTroop.Global(globalName)
 	if !global.IsValid() || err != nil {
 		state.RaiseError(fmt.Sprintf("global:%s not found", globalName))
 	}
 
-	state.Push(new_userdata(state, global))
+	state.Push(newUserData(state, global))
 	return 1
 }
