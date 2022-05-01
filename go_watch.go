@@ -9,7 +9,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"bou.ke/monkey"
+	"github.com/agiledragon/gomonkey"
 	lua "github.com/yuin/gopher-lua"
 	"github.com/zeebo/goof"
 )
@@ -475,7 +475,7 @@ func lHotfixFuncWithName(state *lua.LState) int {
 
 	hotfix := &HotfixContext{state: newState, fn: fn, in: inTypes, out: outTypes, name: name}
 	newFunc := reflect.MakeFunc(reflect.FuncOf(inTypes, outTypes, false), hotfix.Do)
-	monkey.Patch(oldFunc.Interface(), newFunc.Interface())
+	gomonkey.ApplyFunc(oldFunc.Interface(), newFunc.Interface())
 	return 0
 }
 
