@@ -1,24 +1,19 @@
 package go_watch
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"unsafe"
 
-	"github.com/agiledragon/gomonkey"
 	lua "github.com/yuin/gopher-lua"
-	"github.com/zeebo/goof"
 )
 
 const moduleName = "go_watch"
 const debugCtx = "go_watch_debug_ctx"
 
 var exports map[string]lua.LGFunction
-var goofTroop goof.Troop
 
 func init() {
 	exports = map[string]lua.LGFunction{
@@ -32,13 +27,12 @@ func init() {
 		"get_obj_type":         lGetObjType,
 		"get_global_with_name": lGetGlobalWithName,
 
-		"clone":                 lClone,
-		"ptr_to_val":            lPtrToVal,
-		"val_to_ptr":            lValToPtr,
-		"convert_type_to":       lConvertTypeTo,
-		"call":                  lCall,
-		"call_func_with_name":   lCallFuncWithName,
-		"hotfix_func_with_name": lHotfixFuncWithName,
+		"clone":               lClone,
+		"ptr_to_val":          lPtrToVal,
+		"val_to_ptr":          lValToPtr,
+		"convert_type_to":     lConvertTypeTo,
+		"call":                lCall,
+		"call_func_with_name": lCallFuncWithName,
 
 		"field_get_by_name":  lFieldGetByName,
 		"field_set_by_name":  lFieldSetByName,
@@ -84,25 +78,15 @@ func init() {
 	}
 }
 
-type Func struct {
-	codePtr uintptr
-}
-
-type RootFunc func(name string) interface{}
-type PrintFunc func(session int, str string)
-type Context struct {
-	root  RootFunc
-	print PrintFunc
-}
-
 func NewLuaState(root RootFunc, print PrintFunc) (*lua.LState, error) {
-	_, err := goofTroop.Global("")
+	ctx := &Context{root: root, print: print}
+	err := ctx.init()
 	if err != nil {
 		return nil, err
 	}
 
 	state := lua.NewState()
-	ud := newUserData(state, &Context{root: root, print: print})
+	ud := newUserData(state, ctx)
 	state.SetGlobal(debugCtx, ud)
 
 	state.PreloadModule(moduleName, func(state *lua.LState) int {
@@ -234,52 +218,14 @@ func lCall(state *lua.LState) int {
 	return len(ret)
 }
 
-var (
-	ErrNotFound = errors.New("not found")
-)
-
-var types map[string]reflect.Type
-var typesMutex sync.Mutex
-
-//go:linkname dwarfName github.com/zeebo/goof.dwarfName
-func dwarfName(rtyp reflect.Type) (out string)
-
-func loadTypes() {
-	typesMutex.Lock()
-	defer typesMutex.Unlock()
-
-	if types != nil {
-		return
-	}
-
-	allType, _ := goofTroop.Types()
-	types = make(map[string]reflect.Type, len(allType))
-	for _, t := range allType {
-		types[dwarfName(t)] = t
-	}
-}
-
-func findFuncWithName(name string) (uintptr, error) {
-	rtroop := reflect.ValueOf(goofTroop)
-	functions := rtroop.FieldByName("functions")
-	if !functions.IsValid() {
-		return 0, ErrNotFound
-	}
-	fun := functions.MapIndex(reflect.ValueOf(name))
-	if !fun.IsValid() {
-		return 0, ErrNotFound
-	}
-
-	pc := fun.FieldByName("pc")
-	return uintptr(pc.Uint()), nil
-}
-
 func lCallFuncWithName(state *lua.LState) int {
+	ctx := getContext(state)
+
 	name := state.CheckString(1)
 	in := state.CheckTable(2)
 	out := state.CheckTable(3)
 
-	ptr, err := findFuncWithName(name)
+	ptr, err := ctx.findFunc(name)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("func:%s not found", name))
 	}
@@ -330,68 +276,14 @@ func lCallFuncWithName(state *lua.LState) int {
 	return len(ret)
 }
 
-type HotfixContext struct {
-	state *lua.LState
-	fn    *lua.LFunction
-	in    []reflect.Type
-	out   []reflect.Type
-	lock  sync.Mutex
-	name  string
-}
-
-func (ctx *HotfixContext) Do(params []reflect.Value) []reflect.Value {
-	ctx.lock.Lock()
-	defer ctx.lock.Unlock()
-
-	var err error
-	ret := make([]reflect.Value, len(ctx.out))
-	if len(params) != len(ctx.in) {
-		goto err_ret
-	}
-
-	ctx.state.Push(ctx.fn)
-	for _, param := range params {
-		ctx.state.Push(newUserData(ctx.state, param))
-	}
-
-	err = ctx.state.PCall(len(params), len(ctx.out), nil)
-	if err != nil {
-		panic(fmt.Errorf("hotfix function error %s %v", ctx.name, err))
-		//fmt.Println("hotfix function error", err)
-		//goto err_ret
-	}
-
-	for i := 1; i <= len(ctx.out); i++ {
-		ud := ctx.state.CheckUserData(-1)
-		ctx.state.Pop(1)
-
-		if r, ok := ud.Value.(reflect.Value); ok {
-			ret[len(ctx.out)-i] = r
-		} else {
-			ret[len(ctx.out)-i] = reflect.ValueOf(ud.Value)
-		}
-	}
-	return ret
-
-err_ret:
-
-	for i, o := range ctx.out {
-		ret[i] = reflect.New(o).Elem()
-	}
-	return ret
-}
-
 func lSearchFuncName(state *lua.LState) int {
+	ctx := getContext(state)
 	include := state.CheckString(1)
-	functions, err := goofTroop.Functions()
-	if err != nil {
-		state.RaiseError(fmt.Sprintf("system error %s", err.Error()))
-	}
 
 	ret := &lua.LTable{}
-	for _, name := range functions {
-		if include == "" || strings.Index(name, include) >= 0 {
-			ret.Append(lua.LString(name))
+	for _, f := range ctx.bi.Functions {
+		if include == "" || strings.Index(f.Name, include) >= 0 {
+			ret.Append(lua.LString(f.Name))
 		}
 	}
 
@@ -400,14 +292,11 @@ func lSearchFuncName(state *lua.LState) int {
 }
 
 func lSearchGlobalName(state *lua.LState) int {
+	ctx := getContext(state)
 	include := state.CheckString(1)
-	globals, err := goofTroop.Globals()
-	if err != nil {
-		state.RaiseError(fmt.Sprintf("system error %s", err.Error()))
-	}
 
 	ret := &lua.LTable{}
-	for _, name := range globals {
+	for name := range ctx.globals {
 		if include == "" || strings.Index(name, include) >= 0 {
 			ret.Append(lua.LString(name))
 		}
@@ -415,68 +304,6 @@ func lSearchGlobalName(state *lua.LState) int {
 
 	state.Push(ret)
 	return 1
-}
-
-func lHotfixFuncWithName(state *lua.LState) int {
-	name := state.CheckString(1)
-	script := state.CheckString(2)
-	in := state.CheckTable(3)
-	out := state.CheckTable(4)
-
-	ptr, err := findFuncWithName(name)
-	if err != nil {
-		state.RaiseError(fmt.Sprintf("func:%s not found", name))
-	}
-
-	ctx := getContext(state)
-	newState, _ := NewLuaState(ctx.root, ctx.print)
-
-	fn, err := newState.LoadString(script)
-	if err != nil {
-		state.RaiseError(fmt.Sprintf("script error:%v", err))
-	}
-
-	inTypes := make([]reflect.Type, in.Len())
-	for i := 1; i <= in.Len(); i++ {
-		v := in.RawGetInt(i)
-		if ud, ok := v.(*lua.LUserData); ok {
-			if r, ok := ud.Value.(reflect.Value); ok {
-				inTypes[i-1] = r.Type()
-			} else if t, ok := ud.Value.(reflect.Type); ok {
-				inTypes[i-1] = t
-			} else {
-				inTypes[i-1] = reflect.TypeOf(ud.Value)
-			}
-		} else {
-			state.RaiseError(fmt.Sprintf("in params:%d not user data", i))
-		}
-	}
-
-	outTypes := make([]reflect.Type, out.Len())
-	for i := 1; i <= out.Len(); i++ {
-		v := out.RawGetInt(i)
-		if ud, ok := v.(*lua.LUserData); ok {
-			if r, ok := ud.Value.(reflect.Value); ok {
-				outTypes[i-1] = r.Type()
-			} else if t, ok := ud.Value.(reflect.Type); ok {
-				outTypes[i-1] = t
-			} else {
-				outTypes[i-1] = reflect.TypeOf(ud.Value)
-			}
-		} else {
-			state.RaiseError(fmt.Sprintf("out params:%d not user data", i))
-		}
-	}
-
-	oldFunc := reflect.MakeFunc(reflect.FuncOf(inTypes, outTypes, false), nil)
-	funcPtrVal := reflect.ValueOf(oldFunc).FieldByName("ptr").Pointer()
-	funcPtr := (*Func)(unsafe.Pointer(funcPtrVal))
-	funcPtr.codePtr = ptr
-
-	hotfix := &HotfixContext{state: newState, fn: fn, in: inTypes, out: outTypes, name: name}
-	newFunc := reflect.MakeFunc(reflect.FuncOf(inTypes, outTypes, false), hotfix.Do)
-	gomonkey.ApplyFunc(oldFunc.Interface(), newFunc.Interface())
-	return 0
 }
 
 func lMethodGetByName(state *lua.LState) int {
@@ -1083,12 +910,12 @@ func lNewString(state *lua.LState) int {
 }
 
 func lNewWithName(state *lua.LState) int {
-	loadTypes()
+	ctx := getContext(state)
 
 	typeName := state.CheckString(1)
 	usePtr := state.CheckBool(2)
-	t, ok := types[typeName]
-	if !ok {
+	t, err := ctx.findType(typeName)
+	if err != nil {
 		state.RaiseError(fmt.Sprintf("type:%s not found", typeName))
 	}
 
@@ -1110,12 +937,16 @@ func lNewInterface(state *lua.LState) int {
 }
 
 func lSearchTypeName(state *lua.LState) int {
-	loadTypes()
+	ctx := getContext(state)
 
 	include := state.CheckString(1)
 
+	types, err := ctx.bi.Types()
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("type search error:%s", err.Error()))
+	}
 	ret := &lua.LTable{}
-	for name := range types {
+	for _, name := range types {
 		if include == "" || strings.Index(name, include) >= 0 {
 			ret.Append(lua.LString(name))
 		}
@@ -1383,12 +1214,12 @@ func lGetObjType(state *lua.LState) int {
 }
 
 func lGetTypeWithName(state *lua.LState) int {
-	loadTypes()
+	ctx := getContext(state)
 
 	typeName := state.CheckString(1)
 	ptr := state.CheckBool(2)
-	t, ok := types[typeName]
-	if !ok {
+	t, err := ctx.findType(typeName)
+	if err != nil {
 		state.RaiseError(fmt.Sprintf("type:%s not found", typeName))
 	}
 
@@ -1401,9 +1232,10 @@ func lGetTypeWithName(state *lua.LState) int {
 }
 
 func lGetGlobalWithName(state *lua.LState) int {
+	ctx := getContext(state)
 	globalName := state.CheckString(1)
-	global, err := goofTroop.Global(globalName)
-	if !global.IsValid() || err != nil {
+	global, ok := ctx.globals[globalName]
+	if !ok || !global.IsValid() {
 		state.RaiseError(fmt.Sprintf("global:%s not found", globalName))
 	}
 

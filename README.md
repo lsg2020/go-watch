@@ -1,12 +1,11 @@
 # go-watch
-* 使用[monkey patching](https://github.com/bouk/monkey)配合lua脚本运行时替换修复函数
-* 使用[goof](https://github.com/zeebo/goof)查找调试符号,执行未导出的私有函数及全局变量
+* 使用[delve](https://github.com/go-delve/delve)查找调试符号,执行修改未导出的私有函数及全局变量
 * 使用反射运行时打印修改程序内部状态,方便调试
+* 使用方来保证线程安全
 
 ## 注意
 * 内联优化过的函数会找不到,可以使用`go build -gcflags=all=-l`关闭内联优化
-* 修复及执行函数并不十分安全,生产环境谨慎使用
-* 目前测试过的版本go 1.14/1.15/1.16
+* 目前测试过的版本go 1.14-1.17
 
 
 ## 快速使用
@@ -56,50 +55,3 @@ print("call_func_with_name testAdd:", go_watch.get_number(r1), go_watch.get_numb
 go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", {role1, go_watch.new_string("Name by lua")}, {})
 ```
 
-* [修复函数](https://github.com/lsg2020/go-watch/blob/master/examples/hotfix.go)
-
-``` lua
-local go_watch = require('go_watch')
-local role1 = go_watch.root_get('')
-
--- call unexport function
-local r1, r2, r3 = go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", {go_watch.new_int(1), go_watch.new_int(2)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
-print("call_func_with_name testAdd:", go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
-
--- hotfix unexport function
-go_watch.hotfix_func_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", [[
-    local go_watch = require('go_watch') 
-    local a, b = ...
-    print("hotfix replace testAdd:", go_watch.get_number(a), go_watch.get_number(b))
-    return a, b, go_watch.new_int(go_watch.get_number(a) + go_watch.get_number(b) + 1000)
-]], {go_watch.new_int(0), go_watch.new_int(0)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
-
-r1, r2, r3 = go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", {go_watch.new_int(1), go_watch.new_int(2)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
-print("hotfix testAdd:", go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
-
-
--- call unexport method
-go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", {role1, go_watch.new_string("Name by lua")}, {})
-
--- hotfix unexport method
-go_watch.hotfix_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", [[
-    local go_watch = require('go_watch') 
-    local role, name = ...
-    name = go_watch.get_string(name)
-    print("hotfix replace setName  oldName:", go_watch.get_string(go_watch.field_get_by_name(role, "name")), " newName:", name)
-    go_watch.field_set_by_name(role, "name", go_watch.new_string("hotfix name ------" .. name))
-]], {go_watch.new_with_name("module_data.RoleInfo", true), go_watch.new_string("")}, {})
-
--- call unexport method
-go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", {role1, go_watch.new_string("Name by lua")}, {})
-```
-
-## Thanks
-
-[https://github.com/bouk/monkey](https://github.com/bouk/monkey)
-
-[github.com/zeebo/goof](github.com/zeebo/goof)
-
-[https://github.com/AlaxLee/go-forceexport](https://github.com/AlaxLee/go-forceexport)
-
-[https://github.com/v2pro/plz](https://github.com/v2pro/plz)
