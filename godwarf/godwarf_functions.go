@@ -100,6 +100,18 @@ func (d *Dwarf) ForeachFunc(f func(name string, pc uint64)) error {
 	return nil
 }
 
+func (d *Dwarf) FindFuncEntry(name string) (*proc.Function, error) {
+	if err := d.check(); err != nil {
+		return nil, err
+	}
+
+	f, err := d.findFunc(name)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
 func (d *Dwarf) FindFuncPc(name string) (uint64, error) {
 	if err := d.check(); err != nil {
 		return 0, err
