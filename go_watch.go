@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/lsg2020/go-watch/godwarf"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -34,9 +35,8 @@ func init() {
 		"call":                lCall,
 		"call_func_with_name": lCallFuncWithName,
 
-		"field_get_by_name":  lFieldGetByName,
-		"field_set_by_name":  lFieldSetByName,
-		"method_get_by_name": lMethodGetByName,
+		"field_get_by_name": lFieldGetByName,
+		"field_set_by_name": lFieldSetByName,
 
 		"map_get":     lMapGet,
 		"map_set":     lMapSet,
@@ -78,12 +78,24 @@ func init() {
 	}
 }
 
+type RootFunc func(name string) interface{}
+type PrintFunc func(session int, str string)
+type Context struct {
+	root  RootFunc
+	print PrintFunc
+	dwarf *godwarf.Dwarf
+}
+
 func NewLuaState(root RootFunc, print PrintFunc) (*lua.LState, error) {
-	ctx := &Context{root: root, print: print}
-	err := ctx.init()
+	dwarf, err := godwarf.NewDwarf("")
 	if err != nil {
 		return nil, err
 	}
+	return NewLuaStateEx(root, print, dwarf)
+}
+
+func NewLuaStateEx(root RootFunc, print PrintFunc, dwarf *godwarf.Dwarf) (*lua.LState, error) {
+	ctx := &Context{root: root, print: print, dwarf: dwarf}
 
 	state := lua.NewState()
 	ud := newUserData(state, ctx)
@@ -222,24 +234,19 @@ func lCallFuncWithName(state *lua.LState) int {
 	ctx := getContext(state)
 
 	name := state.CheckString(1)
-	in := state.CheckTable(2)
-	out := state.CheckTable(3)
+	variadic := state.CheckBool(2)
+	in := state.CheckTable(3)
 
-	ptr, err := ctx.findFunc(name)
-	if err != nil {
-		state.RaiseError(fmt.Sprintf("func:%s not found", name))
-	}
-
-	inTypes := make([]reflect.Type, in.Len())
+	//inTypes := make([]reflect.Type, in.Len())
 	inValues := make([]reflect.Value, in.Len())
 	for i := 1; i <= in.Len(); i++ {
 		v := in.RawGetInt(i)
 		if ud, ok := v.(*lua.LUserData); ok {
 			if r, ok := ud.Value.(reflect.Value); ok {
-				inTypes[i-1] = r.Type()
+				//inTypes[i-1] = r.Type()
 				inValues[i-1] = r
 			} else {
-				inTypes[i-1] = reflect.TypeOf(ud.Value)
+				//inTypes[i-1] = reflect.TypeOf(ud.Value)
 				inValues[i-1] = reflect.ValueOf(ud.Value)
 			}
 		} else {
@@ -247,28 +254,10 @@ func lCallFuncWithName(state *lua.LState) int {
 		}
 	}
 
-	outTypes := make([]reflect.Type, out.Len())
-	for i := 1; i <= out.Len(); i++ {
-		v := out.RawGetInt(i)
-		if ud, ok := v.(*lua.LUserData); ok {
-			if r, ok := ud.Value.(reflect.Value); ok {
-				outTypes[i-1] = r.Type()
-			} else if t, ok := ud.Value.(reflect.Type); ok {
-				outTypes[i-1] = t
-			} else {
-				outTypes[i-1] = reflect.TypeOf(ud.Value)
-			}
-		} else {
-			state.RaiseError(fmt.Sprintf("out params:%d not user data", i))
-		}
+	ret, err := ctx.dwarf.CallFunc(name, variadic, inValues)
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("call func:%s err:%s", name, err.Error()))
 	}
-
-	newFunc := reflect.MakeFunc(reflect.FuncOf(inTypes, outTypes, false), nil)
-	funcPtrVal := reflect.ValueOf(newFunc).FieldByName("ptr").Pointer()
-	funcPtr := (*Func)(unsafe.Pointer(funcPtrVal))
-	funcPtr.codePtr = ptr
-
-	ret := newFunc.Call(inValues)
 	for _, r := range ret {
 		ud := newUserData(state, r)
 		state.Push(ud)
@@ -281,10 +270,13 @@ func lSearchFuncName(state *lua.LState) int {
 	include := state.CheckString(1)
 
 	ret := &lua.LTable{}
-	for _, f := range ctx.bi.Functions {
-		if include == "" || strings.Index(f.Name, include) >= 0 {
-			ret.Append(lua.LString(f.Name))
+	err := ctx.dwarf.ForeachFunc(func(name string, pc uint64) {
+		if include == "" || strings.Index(name, include) >= 0 {
+			ret.Append(lua.LString(name))
 		}
+	})
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("function search error:%s", err.Error()))
 	}
 
 	state.Push(ret)
@@ -296,36 +288,15 @@ func lSearchGlobalName(state *lua.LState) int {
 	include := state.CheckString(1)
 
 	ret := &lua.LTable{}
-	for name := range ctx.globals {
+	err := ctx.dwarf.ForeachGlobal(func(name string, v reflect.Value) {
 		if include == "" || strings.Index(name, include) >= 0 {
 			ret.Append(lua.LString(name))
 		}
+	})
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("global search error:%s", err.Error()))
 	}
 
-	state.Push(ret)
-	return 1
-}
-
-func lMethodGetByName(state *lua.LState) int {
-	ud := state.CheckUserData(1)
-	name := state.CheckString(2)
-
-	var rf reflect.Value
-	var rud reflect.Value
-	if r, ok := ud.Value.(reflect.Value); ok {
-		rud = r
-	} else {
-		rud = reflect.ValueOf(ud.Value)
-	}
-	if rud.Kind() == reflect.Ptr && (rud.Elem().Kind() == reflect.Struct || rud.Elem().Kind() == reflect.Interface) {
-		rf = rud.MethodByName(name)
-	} else if rud.Kind() == reflect.Struct || rud.Kind() == reflect.Interface {
-		rf = rud.MethodByName(name)
-	} else {
-		state.RaiseError("param1 need struct/interface")
-	}
-
-	ret := newUserData(state, rf)
 	state.Push(ret)
 	return 1
 }
@@ -914,7 +885,7 @@ func lNewWithName(state *lua.LState) int {
 
 	typeName := state.CheckString(1)
 	usePtr := state.CheckBool(2)
-	t, err := ctx.findType(typeName)
+	t, err := ctx.dwarf.FindType(typeName)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("type:%s not found", typeName))
 	}
@@ -938,18 +909,17 @@ func lNewInterface(state *lua.LState) int {
 
 func lSearchTypeName(state *lua.LState) int {
 	ctx := getContext(state)
-
 	include := state.CheckString(1)
 
-	types, err := ctx.bi.Types()
-	if err != nil {
-		state.RaiseError(fmt.Sprintf("type search error:%s", err.Error()))
-	}
 	ret := &lua.LTable{}
-	for _, name := range types {
+	err := ctx.dwarf.ForeachType(func(name string) {
 		if include == "" || strings.Index(name, include) >= 0 {
 			ret.Append(lua.LString(name))
 		}
+
+	})
+	if err != nil {
+		state.RaiseError(fmt.Sprintf("type search error:%s", err.Error()))
 	}
 
 	state.Push(ret)
@@ -1218,7 +1188,7 @@ func lGetTypeWithName(state *lua.LState) int {
 
 	typeName := state.CheckString(1)
 	ptr := state.CheckBool(2)
-	t, err := ctx.findType(typeName)
+	t, err := ctx.dwarf.FindType(typeName)
 	if err != nil {
 		state.RaiseError(fmt.Sprintf("type:%s not found", typeName))
 	}
@@ -1234,8 +1204,8 @@ func lGetTypeWithName(state *lua.LState) int {
 func lGetGlobalWithName(state *lua.LState) int {
 	ctx := getContext(state)
 	globalName := state.CheckString(1)
-	global, ok := ctx.globals[globalName]
-	if !ok || !global.IsValid() {
+	global, err := ctx.dwarf.FindGlobal(globalName)
+	if err != nil || !global.IsValid() {
 		state.RaiseError(fmt.Sprintf("global:%s not found", globalName))
 	}
 

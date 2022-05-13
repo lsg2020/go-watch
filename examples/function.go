@@ -28,7 +28,7 @@ func main() {
 	local role1 = go_watch.root_get('')
 
 	-- call unexport function
-	local r1, r2, r3 = go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", {go_watch.new_int(1), go_watch.new_int(2)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
+	local r1, r2, r3 = go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", false, {go_watch.new_int(1), go_watch.new_int(2)})
 	print("call_func_with_name testAdd:", go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
 
 	local module_funcs = go_watch.search_func_name("module_data")
@@ -37,11 +37,10 @@ func main() {
 	end
 
 	-- call unexport method
-	go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", {role1, go_watch.new_string("Name by lua")}, {})
+	go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", false, {role1, go_watch.new_string("Name by lua")})
 
 	-- call public method
-	local add = go_watch.method_get_by_name(role1, "Add")
-	local r1, r2, r3 = go_watch.call(add, go_watch.new_int(100), go_watch.new_int(200))
+	local r1, r2, r3 = go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).Add", false, {role1, go_watch.new_int(100), go_watch.new_int(200)})
 	print("call RoleInfo.Add:", go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
 
 	`, 1); err != nil {

@@ -48,10 +48,10 @@ local go_watch = require('go_watch') -- 引入包
 local role1 = go_watch.root_get('')  -- 获取root数据
 
 -- call unexport function
-local r1, r2, r3 = go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", {go_watch.new_int(1), go_watch.new_int(2)}, {go_watch.new_int(0), go_watch.new_int(0), go_watch.new_int(0)})
+local r1, r2, r3 = go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.testAdd", false, {go_watch.new_int(1), go_watch.new_int(2)})
 print("call_func_with_name testAdd:", go_watch.get_number(r1), go_watch.get_number(r2), go_watch.get_number(r3))
 
 -- call unexport method
-go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", {role1, go_watch.new_string("Name by lua")}, {})
+go_watch.call_func_with_name("github.com/lsg2020/go-watch/examples/module_data.(*RoleInfo).setName", false, {role1, go_watch.new_string("Name by lua")})
 ```
 
