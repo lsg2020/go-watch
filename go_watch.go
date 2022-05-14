@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/lsg2020/go-watch/godwarf"
+	"github.com/lsg2020/gort"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -83,18 +83,18 @@ type PrintFunc func(session int, str string)
 type Context struct {
 	root  RootFunc
 	print PrintFunc
-	dwarf *godwarf.Dwarf
+	dwarf *gort.Dwarf
 }
 
 func NewLuaState(root RootFunc, print PrintFunc) (*lua.LState, error) {
-	dwarf, err := godwarf.NewDwarf("")
+	dwarf, err := gort.NewDwarf("")
 	if err != nil {
 		return nil, err
 	}
 	return NewLuaStateEx(root, print, dwarf)
 }
 
-func NewLuaStateEx(root RootFunc, print PrintFunc, dwarf *godwarf.Dwarf) (*lua.LState, error) {
+func NewLuaStateEx(root RootFunc, print PrintFunc, dwarf *gort.Dwarf) (*lua.LState, error) {
 	ctx := &Context{root: root, print: print, dwarf: dwarf}
 
 	state := lua.NewState()
