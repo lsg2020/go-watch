@@ -83,18 +83,18 @@ type PrintFunc func(session int, str string)
 type Context struct {
 	root  RootFunc
 	print PrintFunc
-	dwarf *gort.Dwarf
+	dwarf *gort.DwarfRT
 }
 
 func NewLuaState(root RootFunc, print PrintFunc) (*lua.LState, error) {
-	dwarf, err := gort.NewDwarf("")
+	dwarf, err := gort.NewDwarfRT("")
 	if err != nil {
 		return nil, err
 	}
 	return NewLuaStateEx(root, print, dwarf)
 }
 
-func NewLuaStateEx(root RootFunc, print PrintFunc, dwarf *gort.Dwarf) (*lua.LState, error) {
+func NewLuaStateEx(root RootFunc, print PrintFunc, dwarf *gort.DwarfRT) (*lua.LState, error) {
 	ctx := &Context{root: root, print: print, dwarf: dwarf}
 
 	state := lua.NewState()
