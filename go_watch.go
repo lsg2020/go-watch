@@ -54,13 +54,16 @@ func init() {
 		"slice_append":   lSliceAppend,
 		"slice_make":     lSliceMake,
 
-		"get_string":  lGetString,
-		"set_string":  lSetString,
-		"get_number":  lGetNumber,
-		"set_number":  lSetNumber,
-		"get_boolean": lGetBoolean,
-		"set_boolean": lSetBoolean,
-		"set_any":     lSetAny,
+		"get_string":   lGetString,
+		"set_string":   lSetString,
+		"get_number":   lGetNumber,
+		"set_number":   lSetNumber,
+		"get_boolean":  lGetBoolean,
+		"set_boolean":  lSetBoolean,
+		"set_any":      lSetAny,
+		"get_len":      lGetLen,
+		"get_type_str": lGetTypeStr,
+		"get_pointer":  lGetPointer,
 
 		"new_boolean":   lNewBoolean,
 		"new_int":       lNewInt,
@@ -1210,5 +1213,23 @@ func lGetGlobalWithName(state *lua.LState) int {
 	}
 
 	state.Push(newUserData(state, global))
+	return 1
+}
+
+func lGetLen(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	state.Push(lua.LNumber(ud.Value.(reflect.Value).Len()))
+	return 1
+}
+
+func lGetTypeStr(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	state.Push(lua.LString(ud.Value.(reflect.Value).Type().String()))
+	return 1
+}
+
+func lGetPointer(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	state.Push(lua.LString(strconv.FormatUint(uint64(ud.Value.(reflect.Value).Pointer()), 10)))
 	return 1
 }

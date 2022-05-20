@@ -39,6 +39,10 @@ func main() {
 		go_watch.map_set(map1, go_watch.new_int32(i), role)
 	end
 
+    print("map len", go_watch.get_len(map1))
+	print("map type", go_watch.get_type_str(map1))
+	print("map pointer", go_watch.get_pointer(map1))
+
 	-- modify unexport field
 	do
 		local role1 = go_watch.map_get(map1, go_watch.new_int32(1))
