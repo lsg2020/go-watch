@@ -34,6 +34,9 @@ func init() {
 		"convert_type_to":     lConvertTypeTo,
 		"call":                lCall,
 		"call_func_with_name": lCallFuncWithName,
+		"to_string":           lToString,
+		"rval_to_interface":   lRValToInterface,
+		"interface_to_rval":   lInterfaceToRVal,
 
 		"field_get_by_name": lFieldGetByName,
 		"field_set_by_name": lFieldSetByName,
@@ -1231,5 +1234,23 @@ func lGetTypeStr(state *lua.LState) int {
 func lGetPointer(state *lua.LState) int {
 	ud := state.CheckUserData(1)
 	state.Push(lua.LString(strconv.FormatUint(uint64(ud.Value.(reflect.Value).Pointer()), 10)))
+	return 1
+}
+
+func lToString(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	state.Push(lua.LString(fmt.Sprintf("%#v", ud.Value.(reflect.Value).Interface())))
+	return 1
+}
+
+func lRValToInterface(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	state.Push(newUserData(state, ud.Value.(reflect.Value).Interface()))
+	return 1
+}
+
+func lInterfaceToRVal(state *lua.LState) int {
+	ud := state.CheckUserData(1)
+	state.Push(newUserData(state, reflect.ValueOf(ud.Value)))
 	return 1
 }

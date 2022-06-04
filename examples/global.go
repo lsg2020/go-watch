@@ -31,8 +31,10 @@ func main() {
 	end
 
 	local global = go_watch.get_global_with_name("github.com/lsg2020/go-watch/examples/module_data.testGlobalRoleInfo")
+	print("1234", go_watch.to_string(global), go_watch.get_string(go_watch.rval_to_interface(go_watch.interface_to_rval(go_watch.new_string("--==")))))
 	global = go_watch.val_to_ptr(global)
 	go_watch.field_set_by_name(global, "name", go_watch.new_string("test set global name"))
+
 
 	`, 1); err != nil {
 		fmt.Println("go watch error:", err)
